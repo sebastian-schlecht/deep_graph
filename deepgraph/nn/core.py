@@ -5,6 +5,8 @@ import theano.tensor as T
 from deep_graph.graph import Node
 from deep_graph.conf import rng
 
+__docformat__ = 'restructedtext en'
+
 
 class Data(Node):
     """

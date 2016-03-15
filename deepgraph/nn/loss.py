@@ -2,6 +2,8 @@ import theano.tensor as T
 
 from deep_graph.graph import Node
 
+__docformat__ = 'restructedtext en'
+
 
 class NegativeLogLikelyHoodLoss(Node):
     """

@@ -8,6 +8,8 @@ from theano.tensor.nnet.abstract_conv import get_conv_output_shape
 from deep_graph.graph import Node
 from deep_graph.conf import rng
 
+__docformat__ = 'restructedtext en'
+
 
 class Conv2DPool(Node):
     """

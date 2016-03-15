@@ -2,6 +2,8 @@ import numpy as np
 
 from deep_graph.constants import *
 
+__docformat__ = 'restructedtext en'
+
 
 class Solver(object):
     """

@@ -50,12 +50,6 @@ class Graph(object):
         self.n_test_batches = 0
         self.n_val_batches = 0
 
-    def add_inputs(self, inputs):
-        for inp in inputs:
-            if not inp.is_data:
-                raise AssertionError("Only data nodes can be added with add_input()")
-            self.add(inp)
-
     def add(self, node):
         """
         Add a node to the computation graph
@@ -246,6 +240,13 @@ class Node(object):
         graph.add(self)
 
     def init(self):
+        """
+        Called during graph compilation. Recursively initializes all preceeding nodes if not already done.
+        This enables that all nodes have access to previous nodes' output shapes and expressions
+        Returns
+        -------
+
+        """
         if not self.is_init:
             for i in self.inputs:
                 if not i.is_init:
@@ -258,14 +259,17 @@ class Node(object):
     def forward(self):
         """
         Called during graph initialization. forward() is responsible of building the theano expression
-        like self.expression = function(input)
+        like self.expression = function(input). It will be called AFTER alloc within the init() call
+        Each node is initialized after its predecessors such that the previous nodes have already setup
+        their output expressions and -shapes.
         :return: None
         """
         raise NotImplementedError()
 
     def alloc(self):
         """
-        During alloc, the output shapes have to be computed and shared variables can be created
+        During alloc, the output shapes have to be computed and shared variables can be created. Called during init BEFORE
+        forward(). Each node's alloc() function is
         :return: None
         """
         raise NotImplementedError()
