@@ -2,8 +2,8 @@ import numpy as np
 import theano
 import theano.tensor as T
 
-from deep_graph.graph import Node
-from deep_graph.conf import rng
+from deepgraph.graph import Node
+from deepgraph.conf import rng
 
 __docformat__ = 'restructedtext en'
 
@@ -84,7 +84,7 @@ class Softmax(Node):
     """
     Compute the softmax of the input. n_in and n_out speciy the input/output sizes respectively
     """
-    def __init__(self, graph, name, n_in, n_out, lr=1, is_output=False):
+    def __init__(self, graph, name, n_out, lr=1, is_output=False):
         """
         Constructor
         :param graph: Graph
@@ -100,28 +100,40 @@ class Softmax(Node):
         self.lr = lr
         # Tell the parent graph that we have gradients to compute
         self.computes_gradient = True
-        self.n_in = n_in
         self.n_out = n_out
+        self.n_in = 0
 
     def alloc(self):
+        if len(self.inputs) != 1:
+            raise ValueError("Softmax nodes can only have one input. This node currently has " + str(len(self.inputs)))
+
+        in_shape = self.inputs[0].output_shape
+        if len(in_shape) != 2:
+            raise AssertionError("Softmax nodes must have 2 dim input. Current input has " + str(len(in_shape)) + " inputs.")
+
+        # For softmax dim 1 is number of samples, dim 2 is already the number of channels.
+        # For higher dims flatten their output shape down to 2 dims
+        self.n_in = in_shape[1]
         # Init weights
-        self.W = theano.shared(
-            value=np.zeros(
-                (self.n_in, self.n_out),
-                dtype=theano.config.floatX
-            ),
-            name='W',
-            borrow=True
-        )
-        # Init bias
-        self.b = theano.shared(
-            value=np.zeros(
-                (self.n_out,),
-                dtype=theano.config.floatX
-            ),
-            name='b',
-            borrow=True
-        )
+        if self.W is None:
+            self.W = theano.shared(
+                value=np.zeros(
+                    (self.n_in, self.n_out),
+                    dtype=theano.config.floatX
+                ),
+                name='W',
+                borrow=True
+            )
+        if self.b is None:
+            # Init bias
+            self.b = theano.shared(
+                value=np.zeros(
+                    (self.n_out,),
+                    dtype=theano.config.floatX
+                ),
+                name='b',
+                borrow=True
+            )
         # These are the params to be updated
         self.params = [self.W, self.b]
         # Remember to compute the output shape
@@ -205,7 +217,7 @@ class FC(Node):
     """
     Implements a single fully connected node. Activations can be specified in the constructor
     """
-    def __init__(self, graph, name, n_in, n_out, activation=T.tanh, lr=1, is_output=False):
+    def __init__(self, graph, name, n_out, activation=T.tanh, lr=1, is_output=False):
         """
         Constructor
         :param graph: Graph
@@ -226,28 +238,36 @@ class FC(Node):
         self.computes_gradient = True
         # Relative learning rate
         self.lr = lr
-        self.n_in = n_in
+        self.n_in = 0
         self.n_out = n_out
 
     def alloc(self):
-        W_values = np.asarray(
-            rng.uniform(
+        if len(self.inputs) != 1:
+            raise AssertionError("Activation nodes must have exactly one input. Current layer has " + str(len(self.inputs)))
+        in_shape = self.inputs[0].output_shape
+        if len(in_shape) != 2:
+            raise AssertionError("Fully connected do not support input with more dimensions than 2 yet. Please flatten the input. first.")
+        # We need the channel count to calculate how much neurons we need
+        self.n_in = in_shape[1]
+
+
+        if self.W is None:
+            # Alloc mem for the weights
+            W_values = np.asarray(rng.uniform(
                 low=-np.sqrt(6. / (self.n_in + self.n_out)),
                 high=np.sqrt(6. / (self.n_in + self.n_out)),
                 size=(self.n_in, self.n_out)
-            ),
-            dtype=theano.config.floatX
-        )
-        if self.activation == theano.tensor.nnet.sigmoid:
-            W_values *= 4
-        W = theano.shared(value=W_values, name='W', borrow=True)
-        b_values = np.zeros((self.n_out,), dtype=theano.config.floatX)
-        b = theano.shared(value=b_values, name='b', borrow=True)
-
-        # Weights
-        self.W = W
+            ),dtype=theano.config.floatX)
+            if self.activation == theano.tensor.nnet.sigmoid:
+                W_values *= 4
+            W = theano.shared(value=W_values, name='W', borrow=True)
+            # Weights
+            self.W = W
         # Bias
-        self.b = b
+        if self.b is None:
+            b_values = np.zeros((self.n_out,), dtype=theano.config.floatX)
+            b = theano.shared(value=b_values, name='b', borrow=True)
+            self.b = b
         # Parameters which should be updated during steps
         self.params = [self.W, self.b]
 

@@ -1,6 +1,6 @@
 import numpy as np
 
-from deep_graph.constants import *
+from deepgraph.constants import *
 
 __docformat__ = 'restructedtext en'
 

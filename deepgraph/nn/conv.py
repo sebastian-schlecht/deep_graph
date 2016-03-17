@@ -5,8 +5,8 @@ from theano.tensor.nnet import conv
 from theano.tensor.signal import downsample
 from theano.tensor.nnet.abstract_conv import get_conv_output_shape
 
-from deep_graph.graph import Node
-from deep_graph.conf import rng
+from deepgraph.graph import Node
+from deepgraph.conf import rng
 
 __docformat__ = 'restructedtext en'
 
@@ -15,13 +15,13 @@ class Conv2DPool(Node):
     """
     Combination of convolution and pooling for ConvNets
     """
-    def __init__(self, graph, name, filter_shape, image_shape, pool_size=(2, 2), border_mode='valid', subsample=(1, 1), activation=T.tanh, lr=1, is_output=False):
+    def __init__(self, graph, name, n_channels, kernel_shape, pool_size=(2, 2), border_mode='valid', subsample=(1, 1), activation=T.tanh, lr=1, is_output=False):
         """
         Constructor
         :param graph: Graph
         :param name: String
-        :param filter_shape: Tuple
-        :param image_shape: Tuple
+        :param n_channels: Int
+        :param kernel_shape: Tuple
         :param pool_size:  Tuple
         :param border_mode: String or Tuple
         :param subsample: Int or Tuple
@@ -38,33 +38,50 @@ class Conv2DPool(Node):
         # Init weights
         # there are "num input feature maps * filter height * filter width"
         # inputs to each hidden unit
-        assert image_shape[1] == filter_shape[1]
+
         self.subsample = subsample
         self.border_mode = border_mode
-        self.filter_shape = filter_shape
-        self.image_shape = image_shape
+        self.n_channels = n_channels
+        self.kernel_shape = kernel_shape
+        self.filter_shape = None
+        self.image_shape = None
         self.pool_size = pool_size
         self.activation = activation
 
 
     def alloc(self):
+        # Compute filter shapes and image shapes
+        if len(self.inputs) != 1:
+            raise AssertionError("Conv nodes only support one input")
+        in_shape = self.inputs[0].output_shape
+        self.image_shape = in_shape
+        self.filter_shape = (
+                    self.n_channels,
+                    self.image_shape[1],
+                    self.kernel_shape[0],
+                    self.kernel_shape[1]
+                            )
+
         fan_in = np.prod(self.filter_shape[1:])
         fan_out = (self.filter_shape[0] * np.prod(self.filter_shape[2:]) //
                    np.prod(self.pool_size))
+        assert self.image_shape[1] == self.filter_shape[1]
         # each unit in the lower layer receives a gradient from:
         # "num output feature maps * filter height * filter width" /
         #   pooling size
-        W_bound = np.sqrt(6. / (fan_in + fan_out))
-        self.W = theano.shared(
-            np.asarray(
-                rng.uniform(low=-W_bound, high=W_bound, size=self.filter_shape),
-                dtype=theano.config.floatX
-            ),
-            name='W_conv',
-            borrow=True
-        )
-        b_values = np.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
-        self.b = theano.shared(value=b_values,name="b_conv", borrow=True)
+        if self.W is None:
+            W_bound = np.sqrt(6. / (fan_in + fan_out))
+            self.W = theano.shared(
+                np.asarray(
+                    rng.uniform(low=-W_bound, high=W_bound, size=self.filter_shape),
+                    dtype=theano.config.floatX
+                ),
+                name='W_conv',
+                borrow=True
+            )
+        if self.b is None:
+            b_values = np.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
+            self.b = theano.shared(value=b_values,name="b_conv", borrow=True)
         # These are the params to be updated
         self.params = [self.W, self.b]
         ##############

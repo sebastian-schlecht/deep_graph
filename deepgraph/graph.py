@@ -1,10 +1,12 @@
 from __future__ import print_function
 
 import numpy as np
+import os
 import theano
 import theano.tensor as T
+import theano.misc.pkl_utils as pkl_utils
 
-from deep_graph.constants import *
+from deepgraph.constants import *
 
 __docformat__ = 'restructedtext en'
 
@@ -49,6 +51,9 @@ class Graph(object):
         self.n_train_batches = 0
         self.n_test_batches = 0
         self.n_val_batches = 0
+        # Persisted parameter file
+        self.data_store = None
+        self.init_weights = False
 
     def add(self, node):
         """
@@ -70,6 +75,13 @@ class Graph(object):
         :param batch_size: Int (Optional)
         :return: None
         """
+        #########################################
+        # Pre-init weights for all nodes in case a dump has been loaded
+        #########################################
+        if self.init_weights:
+            for node in self.nodes:
+                if node.name in self.data_store:
+                    node.set_params(self.data_store[node.name])
         #########################################
         # Init the forward path. Call init on all nodes which internally calls forward() to
         # construct the theano forward expressions
@@ -203,6 +215,35 @@ class Graph(object):
             updates.append((last_update, delta))
         return updates
 
+    def save(self, filename):
+        """
+        Save a graph to a file
+        :param filename: The name of the file to save
+        :return: Bool (success)
+        """
+        data_store = {}
+        for node in self.nodes:
+            name = node.name
+            data_store[name] = node.params
+        with open(filename, "wb") as f:
+            pkl_utils.dump(data_store, f)
+
+        return True
+
+    def load_weights(self, filename):
+        """
+        Load weights from a pickled zip file and store it internally in a hash
+        :param filename: String
+        :return:
+        """
+        if os.path.isfile(filename):
+            with open(filename, "rb") as f:
+                self.data_store = pkl_utils.load(f)
+                self.init_weights = True
+                print("Info:\tFinetuning from file " + filename)
+        else:
+            print("Warning:\tModel file not found.")
+
 
 class Node(object):
     def __init__(self, graph, name, is_output=False ):
@@ -273,6 +314,26 @@ class Node(object):
         :return: None
         """
         raise NotImplementedError()
+
+    def get_params(self):
+        """
+        Get current params
+        :return: List
+        """
+        return self.params
+
+    def set_params(self, params):
+        """
+        Set new parameters. By default W is first, b is second
+        :param params: List
+        :return: None
+        """
+        if len(params) == 2:
+            self.W = params[0]
+            self.b = params[1]
+            self.params = [self.W, self.b]
+        elif len(params) == 1:
+            raise AssertionError("No nodes have one parameter yet.")
 
     def connect(self, successor):
         """
