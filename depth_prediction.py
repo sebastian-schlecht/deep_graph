@@ -99,7 +99,7 @@ def print_weights(graph):
 
 
 if __name__ == "__main__":
-    data = load_data('./data/nyu_depth_v2_labeled.mat')
+    data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
     train_x, val_x = data[0]
     train_y, val_y = data[1]
 
