@@ -228,9 +228,13 @@ class Graph(object):
         for node in self.nodes:
             name = node.name
             data_store[name] = node.params
-        with open(filename, "wb") as f:
-            pkl_utils.dump(data_store, f)
-
+        try:
+            with open(filename, "wb") as f:
+                pkl_utils.dump(data_store, f)
+                log("Model file saved as: %s" % filename, LOG_LEVEL_INFO)
+        except IOError:
+            log("Saving failed with error", LOG_LEVEL_ERROR)
+            return False
         return True
 
     def load_weights(self, filename):
@@ -249,7 +253,7 @@ class Graph(object):
 
 
 class Node(object):
-    def __init__(self, graph, name, is_output=False ):
+    def __init__(self, graph, name, is_output=False):
         if graph is None:
             raise ValueError("Nodes need a parent graph to be assigned to.")
         if name is None:

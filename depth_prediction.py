@@ -9,11 +9,12 @@ from deepgraph.nn.core import *
 from deepgraph.nn.conv import *
 from deepgraph.nn.loss import *
 from deepgraph.solver import *
+from deepgraph.utils import *
 
 
 def load_data(db_file):
     # Read the MAT-File into memory
-    print("Loading data from database ...")
+    log("Loading data from database", LOG_LEVEL_INFO)
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
@@ -27,7 +28,7 @@ def load_data(db_file):
     depths = np.swapaxes(depths, 1, 2)
 
     # Resizing
-    print("Resizing ...")
+    log("Resizing input", LOG_LEVEL_INFO)
     img_scale = 0.5
     depth_scale = 0.125
 
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     #######################
     # Data preprocessing
     #######################
-    print("Preprocessing data ...")
+    log("Preprocessing data", LOG_LEVEL_INFO)
 
     # X
     # Scale into 0-1 range
@@ -119,7 +120,7 @@ if __name__ == "__main__":
         idx += 1
     # Y
     # Scale down by 100
-    train_y *= (0.01)
+    train_y *= 0.01
 
     # Wrap data into theano shared variables
     var_train_x = common.wrap_shared(train_x)
@@ -129,22 +130,23 @@ if __name__ == "__main__":
     var_val_y = common.wrap_shared(val_y)
 
     batch_size = 128
-    print("Building graph ...")
+
     g = build_graph(batch_size=batch_size)
     g.load_weights("data/model.zip")
-    print("Compiling graph ...")
+
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
     solver = Solver(lr=0.01)
     solver.load(g)
     print("Optimizing 1/3...")
-    solver.optimize(60, print_freq=100)
-    print("Optimizing 2/3...")
+    log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
+    solver.optimize(60, print_freq=20)
+    log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
     solver.learning_rate = 0.001
-    solver.optimize(60, print_freq=100)
-    print("Optimizing 3/3...")
+    solver.optimize(60, print_freq=20)
+    log("Starting optimization phase 3/3", LOG_LEVEL_INFO)
     solver.learning_rate = 0.0001
-    solver.optimize(60, print_freq=100)
-    print("Saving model ...")
+    solver.optimize(60, print_freq=20)
+    log("Saving model", LOG_LEVEL_INFO)
     g.save("data/model.zip")
 
 
