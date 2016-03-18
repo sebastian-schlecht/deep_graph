@@ -11,6 +11,18 @@ from deepgraph.utils.logging import *
 
 __docformat__ = 'restructedtext en'
 
+print(
+    "\n\n",
+    " _____                _____                 _\n",
+    "|  _  \              |  __ \               | |\n",
+    "| | | |___  ___ _ __ | |  \/_ __ __ _ _ __ | |__\n",
+    "| | | / _ \/ _ \ '_ \| | __| '__/ _` | '_ \| '_ \\\n",
+    "| |/ /  __/  __/ |_) | |_\ \ | | (_| | |_) | | | |\n",
+    "|___/ \___|\___| .__/ \____/_|  \__,_| .__/|_| |_|\n",
+    "               | |                   | |\n",
+    "               |_|                   |_|\n\n"
+)
+print("Available on GitHub: https://github.com/sebastian-schlecht/deepgraph\n")
 
 class Graph(object):
     """

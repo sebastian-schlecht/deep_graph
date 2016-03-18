@@ -69,7 +69,7 @@ def build_graph(batch_size):
     flatten         = Flatten(graph, "flatten", dims=2)
     hidden_0        = FC(graph, "fc_0", n_out=4096)
     hidden_1        = FC(graph, "fc_1", n_out=4800)
-    rs              = Reshape(graph, "reshape_0", shape=(batch_size, 1, 60, 80), is_output=True)
+    rs              = Reshape(graph, "reshape_0", shape=(batch_size, 1, 60, 80), is_output=False)
 
     loss            = LogarithmicScaleInvariantLoss(graph, "loss")
 
@@ -137,16 +137,19 @@ if __name__ == "__main__":
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
     solver = Solver(lr=0.01)
     solver.load(g)
-    print("Optimizing 1/3...")
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
     solver.optimize(60, print_freq=20)
+    log("Saving intermediate model state", LOG_LEVEL_INFO)
+    g.save("data/model.zip")
     log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
     solver.learning_rate = 0.001
     solver.optimize(60, print_freq=20)
+    log("Saving intermediate model state", LOG_LEVEL_INFO)
+    g.save("data/model.zip")
     log("Starting optimization phase 3/3", LOG_LEVEL_INFO)
     solver.learning_rate = 0.0001
     solver.optimize(60, print_freq=20)
-    log("Saving model", LOG_LEVEL_INFO)
+    log("Saving final model", LOG_LEVEL_INFO)
     g.save("data/model.zip")
 
 
