@@ -9,7 +9,7 @@ from deepgraph.nn.core import *
 from deepgraph.nn.conv import *
 from deepgraph.nn.loss import *
 from deepgraph.solver import *
-from deepgraph.utils import *
+from deepgraph.utils.logging import *
 
 
 def load_data(db_file):

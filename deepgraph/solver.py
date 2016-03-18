@@ -49,6 +49,7 @@ class Solver(object):
         """
         # Start looping
         epoch = 0
+        log("Optimizing for %i epochs" % n_epochs, LOG_LEVEL_INFO)
         while epoch < n_epochs:
             epoch += 1
             for minibatch_index in range(self.graph.n_train_batches):
