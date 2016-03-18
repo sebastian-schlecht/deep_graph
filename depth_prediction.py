@@ -102,6 +102,25 @@ if __name__ == "__main__":
     train_x, val_x = data[0]
     train_y, val_y = data[1]
 
+    #######################
+    # Data preprocessing
+    #######################
+    print("Preprocessing data ...")
+
+    # X
+    # Scale into 0-1 range
+    train_x = train_x.astype(np.float)
+    train_x *= 0.003921
+    # Subtract mean
+    train_mean = np.mean(train_x, axis=0)
+    idx = 0
+    for element in train_x[0]:
+        train_x[idx] = train_x[idx] - train_mean
+        idx += 1
+    # Y
+    # Scale down by 100
+    train_y *= (0.01)
+
     # Wrap data into theano shared variables
     var_train_x = common.wrap_shared(train_x)
     var_train_y = common.wrap_shared(train_y)
@@ -109,16 +128,22 @@ if __name__ == "__main__":
     var_val_x = common.wrap_shared(val_x)
     var_val_y = common.wrap_shared(val_y)
 
-    batch_size = 16
+    batch_size = 128
     print("Building graph ...")
     g = build_graph(batch_size=batch_size)
     g.load_weights("data/model.zip")
     print("Compiling graph ...")
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    solver = Solver(lr=0.0001)
+    solver = Solver(lr=0.01)
     solver.load(g)
-    print("Optimizing ...")
-    solver.optimize(5, print_freq=1)
+    print("Optimizing 1/3...")
+    solver.optimize(60, print_freq=100)
+    print("Optimizing 2/3...")
+    solver.learning_rate = 0.001
+    solver.optimize(60, print_freq=100)
+    print("Optimizing 3/3...")
+    solver.learning_rate = 0.0001
+    solver.optimize(60, print_freq=100)
     print("Saving model ...")
     g.save("data/model.zip")
 

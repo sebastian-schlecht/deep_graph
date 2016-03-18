@@ -10,9 +10,7 @@ setup(name='DeepGraph',
       url='https://github.com/sebastian-schlecht/deepgraph',
       packages=['deepgraph', 'deepgraph.utils', 'deepgraph.nn'],
       install_requires=[
-            'numpy',
-            'scipy',
-            'scikit-image',
+            'h5py',
             'Theano == 0.8.0rc1',
             ]
      )

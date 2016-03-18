@@ -1,6 +1,7 @@
 import numpy as np
 
 from deepgraph.constants import *
+from deepgraph.utils.logging import *
 
 __docformat__ = 'restructedtext en'
 
@@ -53,18 +54,16 @@ class Solver(object):
             for minibatch_index in range(self.graph.n_train_batches):
                 idx = (epoch - 1) * self.graph.n_train_batches + minibatch_index
                 # Train in any case
-                print("\tBackward pass " + str(idx))
                 minibatch_avg_cost = self.models[TRAIN](minibatch_index, self.learning_rate, self.momentum, self.weight_decay)
                 # Print in case the freq is ok
                 if idx % print_freq == 0:
-                    print "Current training score ..."
-                    print("\taverage is: " + str(minibatch_avg_cost))
+                    log("Training score at iteration %i: %s" % (idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
 
                 if VAL in self.models:
                     if idx % val_freq == 0:
-                        print("Validating graph ...")
                         val_losses = np.array([self.models[VAL](i) for i in range(self.graph.n_val_batches)])
-                        print("\taverage is: " + str(np.mean(val_losses, axis=0)))
+                        log("Validation score at iteration %i: %s" % (idx, str(np.mean(val_losses, axis=0))), LOG_LEVEL_INFO)
+
 
     def optimize_without_var(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None, val_input=None, test_input=None, batch_size=32, print_freq=10):
         """

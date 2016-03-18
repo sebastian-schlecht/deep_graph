@@ -7,6 +7,7 @@ import theano.tensor as T
 import theano.misc.pkl_utils as pkl_utils
 
 from deepgraph.constants import *
+from deepgraph.utils.logging import *
 
 __docformat__ = 'restructedtext en'
 
@@ -75,6 +76,7 @@ class Graph(object):
         :param batch_size: Int (Optional)
         :return: None
         """
+        log("Setting up graph", LOG_LEVEL_INFO)
         #########################################
         # Pre-init weights for all nodes in case a dump has been loaded
         #########################################
@@ -140,6 +142,7 @@ class Graph(object):
         #########################################
         # Either compile the data within this function if it has been provided or simply provide placeholders for it
         #########################################
+        log("Invoking Theano compiler", LOG_LEVEL_INFO)
         if train_inputs is not None:
             if batch_size is None:
                 raise AssertionError("Batch size is needed when compiling the graph with input data.")
@@ -148,7 +151,6 @@ class Graph(object):
             # Zip them
             givens = zip(inputs, replacements)
             # Compile the function
-            print("Invoking compiler ...")
             self.models[TRAIN] = theano.function(
                 inputs=[self.index, self.lr, self.momentum, self.weight_decay],
                 outputs=outputs,
@@ -183,7 +185,6 @@ class Graph(object):
 
         else:
             inputs += [self.lr, self.momentum, self.weight_decay]
-            print("Invoking compiler ...")
             self.models[TRAIN] = theano.function(
                 inputs=inputs,
                 outputs=outputs,
@@ -242,9 +243,9 @@ class Graph(object):
             with open(filename, "rb") as f:
                 self.data_store = pkl_utils.load(f)
                 self.init_weights = True
-                print("Info:\tFinetuning from file " + filename)
+                log("Fine-tuning from file '%s'" % filename, LOG_LEVEL_INFO)
         else:
-            print("Warning:\tModel file not found.")
+            log("Model not found: '%s" % filename, LOG_LEVEL_WARNING)
 
 
 class Node(object):
