@@ -18,10 +18,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:160])
+    depths = np.array(depth_field)
 
     images_field = dataset['images']
-    images = np.array(images_field[0:160]).astype(np.uint8)
+    images = np.array(images_field).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
