@@ -70,8 +70,8 @@ class Reshape(Node):
             raise AssertionError("Reshape nodes can only have exactly one input.")
 
         inshape = self.inputs[0].output_shape
-        if sum(self.shape) != sum(inshape):
-            raise AssertionError("Shapes are not compatible. Inshape is " + str(inshape) + ", outshape is " + str(self.shape))
+        #if sum(self.shape) != sum(inshape):
+        #    raise AssertionError("Shapes are not compatible. Inshape is " + str(inshape) + ", outshape is " + str(self.shape))
         in_ = self.inputs[0].expression
 
         self.expression = in_.reshape(self.shape)
@@ -197,7 +197,7 @@ class Flatten(Node):
     def alloc(self):
         inshape = self.inputs[0].output_shape
         self.output_shape = [inshape[i] for i in range(self.dims)]
-        k = inshape[self.dims + 1]
+        k = inshape[self.dims]
         for j in range(len(inshape) - (self.dims+1)):
             k *= inshape[self.dims + j + 1]
         self.output_shape[self.dims - 1] *= k

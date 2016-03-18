@@ -3,7 +3,7 @@ from deepgraph.solver import *
 from deepgraph.nn.core import *
 from deepgraph.nn.loss import *
 from deepgraph.nn.conv import *
-from deepgraph.tools.datasets import *
+from deepgraph.utils.datasets import *
 
 from theano.tensor.nnet import relu
 

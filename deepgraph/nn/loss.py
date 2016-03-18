@@ -98,3 +98,67 @@ class L2RegularizationLoss(Node):
             (self.inputs[0].W ** 2).sum()
             + (self.inputs[1].W ** 2).sum()
         )
+
+
+class LogarithmicScaleInvariantLoss(Node):
+    """
+    Compute log scale invariant error for depth prediction
+    """
+    def __init__(self, graph, name, lambda_factor=0.0, loss_weight=1.0, is_output=True):
+        """
+        Constructor
+        :param graph: Graph
+        :param name: String
+        :param lambda_factor: Float
+        :param loss_weight: Float
+        :param is_output: Bool
+        :return: Node
+        """
+        super(LogarithmicScaleInvariantLoss, self).__init__(graph, name, is_output=is_output)
+        self.loss_weight = loss_weight
+        self.lambda_factor = lambda_factor
+
+    def alloc(self):
+            self.output_shape = (1,)
+
+    def forward(self):
+            if len(self.inputs) != 2:
+                raise AssertionError("This node needs exactly two inputs to calculate loss.")
+            # Define our forward function
+            in_0 = self.inputs[0].expression
+            in_1 = self.inputs[1].expression
+            eps = 0.00001
+            MAX = 1000000000000
+            diff = T.log(T.clip(in_0, eps, MAX)) - T.log(T.clip(in_1, eps, MAX))
+            # Todo implement scale invariant error
+            self.expression = T.mean(diff**2)
+
+
+
+class EuclideanLoss(Node):
+    """
+    Computes the loss according to the euclidean distance of the input tensors
+    """
+    def __init__(self, graph, name, loss_weight=1.0, is_output=True):
+            """
+            Constructor
+            :param graph:  Graph
+            :param name: String
+            :param loss_weight: Float
+            :param is_output: Boolean
+            :return:
+            """
+            super(EuclideanLoss, self).__init__(graph, name, is_output=is_output)
+            self.loss_weight = loss_weight
+
+    def alloc(self):
+            self.output_shape = (1,)
+
+    def forward(self):
+            if len(self.inputs) != 2:
+                raise AssertionError("This node needs exactly two inputs to calculate loss.")
+            # Define our forward function
+            in_0 = self.inputs[0].expression
+            in_1 = self.inputs[1].expression
+
+            self.expression = 0.5 * T.mean((in_0 - in_1) ** 2)

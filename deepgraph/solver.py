@@ -53,6 +53,7 @@ class Solver(object):
             for minibatch_index in range(self.graph.n_train_batches):
                 idx = (epoch - 1) * self.graph.n_train_batches + minibatch_index
                 # Train in any case
+                print("\tBackward pass " + str(idx))
                 minibatch_avg_cost = self.models[TRAIN](minibatch_index, self.learning_rate, self.momentum, self.weight_decay)
                 # Print in case the freq is ok
                 if idx % print_freq == 0:
@@ -65,7 +66,7 @@ class Solver(object):
                         val_losses = np.array([self.models[VAL](i) for i in range(self.graph.n_val_batches)])
                         print("\taverage is: " + str(np.mean(val_losses, axis=0)))
 
-    def optimize_without_var(self, n_epochs=20, test_freq=100, val_freq=100,train_input=None, val_input=None, test_input=None, batch_size=32, print_freq=10):
+    def optimize_without_var(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None, val_input=None, test_input=None, batch_size=32, print_freq=10):
         """
         Not implemented yet. Should optimize a graph by iterating through the array. Please note that this copies the data to the GPU for each call (slow)
         :param n_epochs: Int

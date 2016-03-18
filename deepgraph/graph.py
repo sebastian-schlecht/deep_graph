@@ -148,6 +148,7 @@ class Graph(object):
             # Zip them
             givens = zip(inputs, replacements)
             # Compile the function
+            print("Invoking compiler ...")
             self.models[TRAIN] = theano.function(
                 inputs=[self.index, self.lr, self.momentum, self.weight_decay],
                 outputs=outputs,
@@ -182,6 +183,7 @@ class Graph(object):
 
         else:
             inputs += [self.lr, self.momentum, self.weight_decay]
+            print("Invoking compiler ...")
             self.models[TRAIN] = theano.function(
                 inputs=inputs,
                 outputs=outputs,
@@ -288,6 +290,7 @@ class Node(object):
         -------
 
         """
+
         if not self.is_init:
             for i in self.inputs:
                 if not i.is_init:

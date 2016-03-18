@@ -3,3 +3,6 @@ data
 .idea
 */.idea
 *.pyc
+dist
+build
+DeepGraph.egg-info
