@@ -18,10 +18,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field)
+    depths = np.array(depth_field[0:10])
 
     images_field = dataset['images']
-    images = np.array(images_field).astype(np.uint8)
+    images = np.array(images_field[0:10]).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -53,11 +53,11 @@ def load_data(db_file):
     return [(images_train, images_val),(depths_train, depths_val)]
 
 
-def build_graph(batch_size):
+def build_graph():
     graph = Graph("depth_predictor")
 
-    data            = Data(graph, "data", T.ftensor4, shape=(batch_size, 3, 240, 320))
-    label           = Data(graph, "label", T.ftensor3, shape=(batch_size, 1, 60, 80))
+    data            = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
+    label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), phase=PHASE_TRAIN)
 
     conv_pool_0     = Conv2DPool(graph, "conv_0", n_channels=96, kernel_shape=(11, 11), pool_size=(3, 3), activation=relu)
     lrn_0           = LRN(graph, "lrn_0")
@@ -69,9 +69,9 @@ def build_graph(batch_size):
     flatten         = Flatten(graph, "flatten", dims=2)
     hidden_0        = FC(graph, "fc_0", n_out=4096)
     hidden_1        = FC(graph, "fc_1", n_out=4800)
-    rs              = Reshape(graph, "reshape_0", shape=(batch_size, 1, 60, 80), is_output=False)
+    rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
 
-    loss            = LogarithmicScaleInvariantLoss(graph, "loss")
+    loss            = EuclideanLoss(graph, "loss")
 
     # Connect
     data.connect(conv_pool_0)
@@ -91,15 +91,9 @@ def build_graph(batch_size):
     return graph
 
 
-def print_weights(graph):
-    for node in graph.nodes:
-        if node.W is not None:
-            print "Name: " + str(node.name)
-            print node.W.get_value()
-
-
 if __name__ == "__main__":
-    data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
+    # data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
+    data = load_data('./data/nyu_depth_v2_labeled.mat')
     train_x, val_x = data[0]
     train_y, val_y = data[1]
 
@@ -131,26 +125,33 @@ if __name__ == "__main__":
 
     batch_size = 128
 
-    g = build_graph(batch_size=batch_size)
-    g.load_weights("data/model.zip")
+    g = build_graph()
+    model_file = "data/model.zip"
+    g.load_weights(model_file)
 
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
     solver = Solver(lr=0.01)
     solver.load(g)
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
-    solver.optimize(60, print_freq=20)
+    solver.optimize(60, print_freq=40)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    g.save("data/model.zip")
+    g.save(model_file)
     log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
     solver.learning_rate = 0.001
-    solver.optimize(60, print_freq=20)
+    solver.optimize(60, print_freq=40)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    g.save("data/model.zip")
+    g.save(model_file)
     log("Starting optimization phase 3/3", LOG_LEVEL_INFO)
     solver.learning_rate = 0.0001
-    solver.optimize(60, print_freq=20)
+    solver.optimize(60, print_freq=40)
     log("Saving final model", LOG_LEVEL_INFO)
-    g.save("data/model.zip")
+    g.save(model_file)
+
+    log("Testing inference", LOG_LEVEL_INFO)
+
+    sample = train_x[4]
+    print g.infer([sample.reshape((1, 3, 240, 320)).astype(np.float32)])
+
 
 
 

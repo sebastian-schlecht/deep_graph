@@ -24,6 +24,8 @@ print(
 )
 print("Available on GitHub: https://github.com/sebastian-schlecht/deepgraph\n")
 
+
+
 class Graph(object):
     """
     Graph class to manage computation nodes and compile them using theano
@@ -96,6 +98,9 @@ class Graph(object):
             for node in self.nodes:
                 if node.name in self.data_store:
                     node.set_params(self.data_store[node.name])
+        # Free some memory
+        self.init_weights = False
+        self.data_store = None
         #########################################
         # Init the forward path. Call init on all nodes which internally calls forward() to
         # construct the theano forward expressions
@@ -124,7 +129,6 @@ class Graph(object):
             # Collect cost
             if node.loss_weight > 0:
                 costs.append((node.loss_weight, node.expression))
-            if node.is_output:
                 outputs.append(node.expression)
             # Collect parameters
             if node.computes_gradient and len(node.params) > 0:
@@ -204,6 +208,19 @@ class Graph(object):
             )
             self.compiled_with_var = False
 
+        # In any case compile an inference version of the graph
+        infer_in = []
+        infer_out = []
+        for node in self.nodes:
+            if node.phase == PHASE_ALL or node.phase == PHASE_INFER:
+                if node.is_output:
+                    infer_out.append(node.expression)
+                elif node.is_data:
+                    infer_in.append(node.expression)
+        self.models[INFER] = theano.function(
+            inputs=infer_in,
+            outputs=infer_out,
+        )
         self.is_compiled = True
 
     def sgd(self, params, learning_rates):
@@ -253,7 +270,7 @@ class Graph(object):
         """
         Load weights from a pickled zip file and store it internally in a hash
         :param filename: String
-        :return:
+        :return: None
         """
         if os.path.isfile(filename):
             with open(filename, "rb") as f:
@@ -263,9 +280,33 @@ class Graph(object):
         else:
             log("Model not found: '%s" % filename, LOG_LEVEL_WARNING)
 
+    def infer(self, arguments):
+        """
+        Execute the forward path of the inference model
+        :param arguments: Model input parameters
+        :return: List of return values
+        """
+        if not self.is_compiled:
+            raise AssertionError("Cannot infer until the model is compiled")
+        # Make sure there is something in memory
+        assert self.models[INFER] is not None
+        # Call
+        return self.models[INFER](*arguments)
+
 
 class Node(object):
-    def __init__(self, graph, name, is_output=False):
+    """
+    Generic node class
+    """
+    def __init__(self, graph, name, is_output=False, phase=PHASE_ALL):
+        """
+        Constructor
+        :param graph: Graph
+        :param name: String
+        :param is_output: Bool
+        :param phase: Int
+        :return: Node
+        """
         if graph is None:
             raise ValueError("Nodes need a parent graph to be assigned to.")
         if name is None:
@@ -296,6 +337,8 @@ class Node(object):
         self.params = []
         # Output shape
         self.output_shape = None
+        # Phase definition
+        self.phase = phase
         # Add to graph
         graph.add(self)
 

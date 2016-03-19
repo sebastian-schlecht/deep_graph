@@ -6,6 +6,7 @@ from theano.tensor.signal import downsample
 from theano.tensor.nnet.abstract_conv import get_conv_output_shape
 
 from deepgraph.graph import Node
+from deepgraph.constants import *
 from deepgraph.conf import rng
 
 __docformat__ = 'restructedtext en'
@@ -15,7 +16,7 @@ class Conv2DPool(Node):
     """
     Combination of convolution and pooling for ConvNets
     """
-    def __init__(self, graph, name, n_channels, kernel_shape, pool_size=(2, 2), border_mode='valid', subsample=(1, 1), activation=T.tanh, lr=1, is_output=False):
+    def __init__(self, graph, name, n_channels, kernel_shape, pool_size=(2, 2), border_mode='valid', subsample=(1, 1), activation=T.tanh, lr=1, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -30,7 +31,7 @@ class Conv2DPool(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(Conv2DPool, self).__init__(graph, name, is_output=is_output)
+        super(Conv2DPool, self).__init__(graph, name, is_output=is_output, phase=phase)
         # Relative learning rate
         self.lr = lr
         # Tell the parent graph that we have gradients to compute
@@ -87,14 +88,14 @@ class Conv2DPool(Node):
         ##############
         # Output shape
         ##############
-        inshape = self.inputs[0].output_shape
-        if len(self.image_shape) != 4:
-            raise AssertionError("Input has to be 4D with shape (batchsize, channels, height, width)")
-
+        # We construct a fakeshape to be able to use the theano internal helper
+        fake_shape = (1, self.image_shape[1], self.image_shape[2], self.image_shape[3])
         # We start with output shapes for conv ops
-        self.output_shape = get_conv_output_shape(image_shape=self.image_shape, kernel_shape=self.filter_shape, border_mode=self.border_mode, subsample=self.subsample)
+        self.output_shape = get_conv_output_shape(image_shape=fake_shape, kernel_shape=self.filter_shape, border_mode=self.border_mode, subsample=self.subsample)
         # But we also do pooling, keep that in mind
-        self.output_shape = (self.output_shape[0], self.output_shape[1], self.output_shape[2] / self.pool_size[0], self.output_shape[3] / self.pool_size[1])
+        # When propagating data, we keep the n in (n,c,h,w) fixed to -1 to make theano
+        # infer it during runtime
+        self.output_shape = (-1, self.output_shape[1], self.output_shape[2] / self.pool_size[0], self.output_shape[3] / self.pool_size[1])
 
     def forward(self):
         if len(self.inputs) > 1:
@@ -103,7 +104,6 @@ class Conv2DPool(Node):
             input=self.inputs[0].expression,
             filters=self.W,
             filter_shape=self.filter_shape,
-            image_shape=self.image_shape,
             border_mode=self.border_mode,
             subsample=self.subsample
         )
@@ -125,7 +125,7 @@ class LRN(Node):
     Original implementation from PyLearn 2.
     See https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/expr/normalize.py for details
     """
-    def __init__(self, graph, name, alpha=1e-4, k=2, beta=0.75, n=5, is_output=False):
+    def __init__(self, graph, name, alpha=1e-4, k=2, beta=0.75, n=5, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -137,7 +137,7 @@ class LRN(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(LRN, self).__init__(graph, name, is_output=is_output)
+        super(LRN, self).__init__(graph, name, is_output=is_output, phase=phase)
         if n % 2 == 0:
             raise NotImplementedError("Only works with odd n for now")
 

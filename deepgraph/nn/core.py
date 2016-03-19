@@ -4,6 +4,7 @@ import theano.tensor as T
 
 from deepgraph.graph import Node
 from deepgraph.conf import rng
+from deepgraph.constants import *
 
 __docformat__ = 'restructedtext en'
 
@@ -14,24 +15,24 @@ class Data(Node):
     Typically used for training and label data.
     Can be reshaped using the reshape parameter
     """
-    def __init__(self, graph, name, type, shape=None, is_output=False):
+    def __init__(self, graph, name, type, shape=None, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
         :param name: String
         :param type: theano.variable
-        :param reshape: Tuple or None
+        :param shape: Tuple
         :param is_output: Bool
         :return: Node
         """
-        super(Data, self).__init__(graph, name, is_output=is_output)
+        super(Data, self).__init__(graph, name, is_output=is_output, phase=phase)
         self.input = type(name)
         self.is_data = True
         self.shape = shape
 
     def alloc(self):
         if self.shape is None:
-            raise AssertionError("Please provide an input shape for this node")
+            raise AssertionError("Please provide an input shape for this node.")
         self.output_shape = self.shape
 
     def forward(self):
@@ -46,7 +47,7 @@ class Reshape(Node):
     """
     Reshapes the previous tensor
     """
-    def __init__(self, graph, name, shape, is_output=False):
+    def __init__(self, graph, name, shape, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -55,7 +56,7 @@ class Reshape(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(Reshape, self).__init__(graph, name, is_output=is_output)
+        super(Reshape, self).__init__(graph, name, is_output=is_output, phase=phase)
         self.shape = shape
 
     def alloc(self):
@@ -84,7 +85,7 @@ class Softmax(Node):
     """
     Compute the softmax of the input. n_in and n_out speciy the input/output sizes respectively
     """
-    def __init__(self, graph, name, n_out, lr=1, is_output=False):
+    def __init__(self, graph, name, n_out, lr=1, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -95,7 +96,7 @@ class Softmax(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(Softmax, self).__init__(graph, name, is_output=is_output)
+        super(Softmax, self).__init__(graph, name, is_output=is_output, phase=phase)
         # Relative learning rate
         self.lr = lr
         # Tell the parent graph that we have gradients to compute
@@ -151,7 +152,7 @@ class ArgMax(Node):
     """
     Computes the argmax of the input. Typically follows a softmax node. Axis specifies the axis to compute the argmax along
     """
-    def __init__(self, graph, name, axis=1, keepdims=False, is_output=False):
+    def __init__(self, graph, name, axis=1, keepdims=False, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -160,7 +161,7 @@ class ArgMax(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(ArgMax, self).__init__(graph, name, is_output=is_output)
+        super(ArgMax, self).__init__(graph, name, is_output=is_output, phase=phase)
         self.axis = axis
         self.keepdims = keepdims
 
@@ -182,7 +183,7 @@ class Flatten(Node):
     """
     Flatten the input into a tensor with dimensions = dims
     """
-    def __init__(self, graph, name, dims, is_output=False):
+    def __init__(self, graph, name, dims, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -191,10 +192,12 @@ class Flatten(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(Flatten, self).__init__(graph, name, is_output=is_output)
+        super(Flatten, self).__init__(graph, name, is_output=is_output, phase=phase)
         self.dims = dims
 
     def alloc(self):
+        if self.dims < 2:
+            raise AssertionError("The data pipeline currently needs 2 dimensions minimum.")
         inshape = self.inputs[0].output_shape
         self.output_shape = [inshape[i] for i in range(self.dims)]
         k = inshape[self.dims]
@@ -217,7 +220,7 @@ class FC(Node):
     """
     Implements a single fully connected node. Activations can be specified in the constructor
     """
-    def __init__(self, graph, name, n_out, activation=T.tanh, lr=1, is_output=False):
+    def __init__(self, graph, name, n_out, activation=T.tanh, lr=1, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -229,9 +232,10 @@ class FC(Node):
         :param b: theano.shared
         :param lr: Float
         :param is_output: Bool
+        :param phase: Int
         :return: Node
         """
-        super(FC, self).__init__(graph, name, is_output=is_output)
+        super(FC, self).__init__(graph, name, is_output=is_output, phase=phase)
         # Activation function
         self.activation = activation
         # Mandatory to be able to collect gradients
@@ -249,7 +253,6 @@ class FC(Node):
             raise AssertionError("Fully connected do not support input with more dimensions than 2 yet. Please flatten the input. first.")
         # We need the channel count to calculate how much neurons we need
         self.n_in = in_shape[1]
-
 
         if self.W is None:
             # Alloc mem for the weights
@@ -286,7 +289,7 @@ class Error(Node):
     """
     Computes the mean error for classification tasks
     """
-    def __init__(self, graph, name, is_output=True):
+    def __init__(self, graph, name, is_output=True, phase=PHASE_TRAIN):
         """
         Constructor
         :param graph: Graph
@@ -294,7 +297,7 @@ class Error(Node):
         :param is_output: Bool
         :return:
         """
-        super(Error, self).__init__(graph, name, is_output=is_output)
+        super(Error, self).__init__(graph, name, is_output=is_output, phase=phase)
 
     def alloc(self):
         self.output_shape = (1,)

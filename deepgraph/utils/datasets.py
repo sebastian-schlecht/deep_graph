@@ -40,12 +40,12 @@ def shared_dataset(data_xy, borrow=True):
     # lets ous get around this issue
     return shared_x, T.cast(shared_y, 'int32')
 
-def load_data(dataset):
-    ''' Loads the dataset
 
+def load_data(dataset):
+    """ Loads the dataset
     :type dataset: string
     :param dataset: the path to the dataset (here MNIST)
-    '''
+    """
 
     #############
     # LOAD DATA #

@@ -1,15 +1,8 @@
 import time
 import datetime
 
+from deepgraph.constants import LOG_LEVEL_STRINGS
 from deepgraph.conf import LOG_LEVEL
-
-LOG_LEVEL_ERROR = 0
-LOG_LEVEL_WARNING = 1
-LOG_LEVEL_INFO = 2
-LOG_LEVEL_DEV = 3
-LOG_LEVEL_VERBOSE = 4
-
-LOG_LEVEL_STRINGS = ["ERROR", "WARNING", "INFO", "DEV", "VERBOSE"]
 
 
 def log(string, log_level):
