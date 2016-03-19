@@ -100,13 +100,25 @@ class Conv2DPool(Node):
     def forward(self):
         if len(self.inputs) > 1:
             raise AssertionError("ConvPool layer can only have one input")
-        conv_out = conv.conv2d(
-            input=self.inputs[0].expression,
-            filters=self.W,
-            filter_shape=self.filter_shape,
-            border_mode=self.border_mode,
-            subsample=self.subsample
-        )
+
+        # Use optimization in case the number of samples is constant during compilation
+        if self.image_shape[0] != -1:
+            conv_out = conv.conv2d(
+                input=self.inputs[0].expression,
+                image_shape=self.image_shape,
+                filters=self.W,
+                filter_shape=self.filter_shape,
+                border_mode=self.border_mode,
+                subsample=self.subsample
+            )
+        else:
+            conv_out = conv.conv2d(
+                input=self.inputs[0].expression,
+                filters=self.W,
+                filter_shape=self.filter_shape,
+                border_mode=self.border_mode,
+                subsample=self.subsample
+            )
         # downsample each feature map individually, using maxpooling
         pooled_out = downsample.max_pool_2d(
             input=conv_out,

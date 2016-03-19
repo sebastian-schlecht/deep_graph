@@ -209,6 +209,7 @@ class Graph(object):
                 )
                 self.compiled_with_var = False
 
+        # In case we also need to build an inference model, compile an apropriate one
         if phase is PHASE_ALL or phase is PHASE_INFER:
             infer_in = []
             infer_out = []
