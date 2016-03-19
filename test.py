@@ -54,7 +54,7 @@ g.compile(train_inputs=[train_x, train_y], val_inputs=[val_x, val_y], batch_size
 log("Starting optimization phase", LOG_LEVEL_INFO)
 solver = Solver(lr=0.1)
 solver.load(g)
-#solver.optimize(1)
+solver.optimize(1)
 log("Saving model", LOG_LEVEL_INFO)
 g.save("data/model.zip")
 

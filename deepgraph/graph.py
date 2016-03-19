@@ -25,7 +25,6 @@ print(
 print("Available on GitHub: https://github.com/sebastian-schlecht/deepgraph\n")
 
 
-
 class Graph(object):
     """
     Graph class to manage computation nodes and compile them using theano
@@ -62,6 +61,7 @@ class Graph(object):
         # Compilation meta
         #########################################
         self.compiled_with_var = False
+        self.phase = PHASE_ALL
         self.is_compiled = False
         self.n_train_batches = 0
         self.n_test_batches = 0
@@ -83,7 +83,7 @@ class Graph(object):
             self.nodes.append(node)
             node.parent = self
 
-    def compile(self, train_inputs=None, test_inputs=None, val_inputs = None, batch_size=None):
+    def compile(self, train_inputs=None, test_inputs=None, val_inputs = None, batch_size=None, phase=PHASE_ALL):
         """
         Compile the graphs expression as a theano function. This method also computes gradients and weight update rules
         :param train_inputs: Theano Shared Variable (Optional)
@@ -159,68 +159,72 @@ class Graph(object):
         # Either compile the data within this function if it has been provided or simply provide placeholders for it
         #########################################
         log("Invoking Theano compiler", LOG_LEVEL_INFO)
-        if train_inputs is not None:
-            if batch_size is None:
-                raise AssertionError("Batch size is needed when compiling the graph with input data.")
-            self.n_train_batches = train_inputs[0].get_value(borrow=True).shape[0] // batch_size
-            replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in train_inputs]
-            # Zip them
-            givens = zip(inputs, replacements)
-            # Compile the function
-            self.models[TRAIN] = theano.function(
-                inputs=[self.index, self.lr, self.momentum, self.weight_decay],
-                outputs=outputs,
-                updates=updates,
-                givens=givens
-            )
-            self.compiled_with_var = True
-            #########################################
-            # In case there are any val and test inputs we compile them here as well
-            #########################################
-            if test_inputs is not None:
-                self.n_test_batches = test_inputs[0].get_value(borrow=True).shape[0] // batch_size
-                replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in test_inputs]
+        if phase is PHASE_ALL or phase is PHASE_TRAIN:
+            if train_inputs is not None:
+                if batch_size is None:
+                    raise AssertionError("Batch size is needed when compiling the graph with input data.")
+                self.n_train_batches = train_inputs[0].get_value(borrow=True).shape[0] // batch_size
+                replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in train_inputs]
+                # Zip them
                 givens = zip(inputs, replacements)
                 # Compile the function
-                self.models[TEST] = theano.function(
+                self.models[TRAIN] = theano.function(
                     inputs=[self.index, self.lr, self.momentum, self.weight_decay],
                     outputs=outputs,
                     updates=updates,
                     givens=givens
                 )
-            if val_inputs is not None:
-                self.n_val_batches = val_inputs[0].get_value(borrow=True).shape[0] // batch_size
-                replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in val_inputs]
-                givens = zip(inputs, replacements)
-                # Compile the function
-                self.models[VAL] = theano.function(
-                    inputs=[self.index],
+                self.compiled_with_var = True
+                #########################################
+                # In case there are any val and test inputs we compile them here as well
+                #########################################
+                if test_inputs is not None:
+                    self.n_test_batches = test_inputs[0].get_value(borrow=True).shape[0] // batch_size
+                    replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in test_inputs]
+                    givens = zip(inputs, replacements)
+                    # Compile the function
+                    self.models[TEST] = theano.function(
+                        inputs=[self.index, self.lr, self.momentum, self.weight_decay],
+                        outputs=outputs,
+                        updates=updates,
+                        givens=givens
+                    )
+                if val_inputs is not None:
+                    self.n_val_batches = val_inputs[0].get_value(borrow=True).shape[0] // batch_size
+                    replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in val_inputs]
+                    givens = zip(inputs, replacements)
+                    # Compile the function
+                    self.models[VAL] = theano.function(
+                        inputs=[self.index],
+                        outputs=outputs,
+                        givens=givens
+                    )
+
+            else:
+                inputs += [self.lr, self.momentum, self.weight_decay]
+                self.models[TRAIN] = theano.function(
+                    inputs=inputs,
                     outputs=outputs,
-                    givens=givens
+                    updates=updates
                 )
+                self.compiled_with_var = False
 
-        else:
-            inputs += [self.lr, self.momentum, self.weight_decay]
-            self.models[TRAIN] = theano.function(
-                inputs=inputs,
-                outputs=outputs,
-                updates=updates
+        if phase is PHASE_ALL or phase is PHASE_INFER:
+            infer_in = []
+            infer_out = []
+            for node in self.nodes:
+                if node.phase == PHASE_ALL or node.phase == PHASE_INFER:
+                    if node.is_output:
+                        infer_out.append(node.expression)
+                    elif node.is_data:
+                        infer_in.append(node.expression)
+            self.models[INFER] = theano.function(
+                inputs=infer_in,
+                outputs=infer_out,
             )
-            self.compiled_with_var = False
 
-        # In any case compile an inference version of the graph
-        infer_in = []
-        infer_out = []
-        for node in self.nodes:
-            if node.phase == PHASE_ALL or node.phase == PHASE_INFER:
-                if node.is_output:
-                    infer_out.append(node.expression)
-                elif node.is_data:
-                    infer_in.append(node.expression)
-        self.models[INFER] = theano.function(
-            inputs=infer_in,
-            outputs=infer_out,
-        )
+        # Set flag to true
+        self.phase = phase
         self.is_compiled = True
 
     def sgd(self, params, learning_rates):

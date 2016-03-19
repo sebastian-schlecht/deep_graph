@@ -95,7 +95,7 @@ class Conv2DPool(Node):
         # But we also do pooling, keep that in mind
         # When propagating data, we keep the n in (n,c,h,w) fixed to -1 to make theano
         # infer it during runtime
-        self.output_shape = (-1, self.output_shape[1], self.output_shape[2] / self.pool_size[0], self.output_shape[3] / self.pool_size[1])
+        self.output_shape = (in_shape[0], self.output_shape[1], self.output_shape[2] / self.pool_size[0], self.output_shape[3] / self.pool_size[1])
 
     def forward(self):
         if len(self.inputs) > 1:
