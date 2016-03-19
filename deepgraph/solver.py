@@ -2,6 +2,7 @@ import numpy as np
 
 from deepgraph.constants import *
 from deepgraph.utils.logging import *
+from deepgraph.nn.core import Dropout
 
 __docformat__ = 'restructedtext en'
 
@@ -94,6 +95,8 @@ class Solver(object):
         :param print_freq: Int
         :return: None
         """
+        # Toggle any dropouts. During optimizatino we want to leverage that
+        Dropout.set_dp_off()
         # Right now we only support two inputs for epoch optimization
         compiled_with_var = self.graph.compiled_with_var
         if not compiled_with_var:

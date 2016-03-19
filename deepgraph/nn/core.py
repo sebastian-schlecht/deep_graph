@@ -70,15 +70,9 @@ class Reshape(Node):
         if len(self.inputs) > 1:
             raise AssertionError("Reshape nodes can only have exactly one input.")
 
-        inshape = self.inputs[0].output_shape
-        #if sum(self.shape) != sum(inshape):
-        #    raise AssertionError("Shapes are not compatible. Inshape is " + str(inshape) + ", outshape is " + str(self.shape))
         in_ = self.inputs[0].expression
 
         self.expression = in_.reshape(self.shape)
-
-
-
 
 
 class Softmax(Node):
@@ -250,17 +244,15 @@ class FC(Node):
             raise AssertionError("Activation nodes must have exactly one input. Current layer has " + str(len(self.inputs)))
         in_shape = self.inputs[0].output_shape
         if len(in_shape) != 2:
-            raise AssertionError("Fully connected do not support input with more dimensions than 2 yet. Please flatten the input. first.")
+            raise AssertionError("Fully connected nodes do not support input with more dimensions than 2 yet. Please flatten the input. first.")
         # We need the channel count to calculate how much neurons we need
         self.n_in = in_shape[1]
 
         if self.W is None:
             # Alloc mem for the weights
-            W_values = np.asarray(rng.uniform(
-                low=-np.sqrt(6. / (self.n_in + self.n_out)),
-                high=np.sqrt(6. / (self.n_in + self.n_out)),
-                size=(self.n_in, self.n_out)
-            ),dtype=theano.config.floatX)
+            W_values = np.asarray(
+                rng.normal(0, 0.01, size=(self.n_in, self.n_out)
+            ), dtype=theano.config.floatX)
             if self.activation == theano.tensor.nnet.sigmoid:
                 W_values *= 4
             W = theano.shared(value=W_values, name='W', borrow=True)
@@ -324,3 +316,42 @@ class Error(Node):
             self.expression = T.mean(T.neq(pred, label))
         else:
             raise NotImplementedError()
+
+
+class Dropout(Node):
+
+    layers = []     # Statically keep track of dropout layers
+
+    def __init__(self, graph, name, prob=0.5, is_output=False, phase=PHASE_ALL):
+        super(Dropout, self).__init__(graph, name, is_output=is_output, phase=phase)
+        self.prob_drop = prob
+        self.prob_keep = 1.0 - prob
+        self.flag_on = theano.shared(np.cast[theano.config.floatX](1.0))
+        self.flag_off = 1.0 - self.flag_on
+        self.mask = None
+
+    def alloc(self):
+        self.output_shape = self.inputs[0].output_shape
+
+    def forward(self):
+        if len(self.inputs) > 1:
+            raise AssertionError("Dropoutlayers only support one input.")
+        inp = self.inputs[0].expression
+        seed_this = rng.randint(0, 2**31-1)
+        mask_rng = T.shared_randomstreams.RandomStreams(seed_this)
+        self.mask = mask_rng.binomial(n=1, p=self.prob_keep, size=inp.shape)
+        Dropout.layers.append(self)
+
+        self.expression = \
+            self.flag_on * T.cast(self.mask, theano.config.floatX) * inp + \
+            self.flag_off * self.prob_keep * inp
+
+    @staticmethod
+    def set_dp_on():
+        for i in range(0, len(Dropout.layers)):
+            Dropout.layers[i].flag_on.set_value(1.0)
+
+    @staticmethod
+    def set_dp_off():
+        for i in range(0, len(Dropout.layers)):
+            Dropout.layers[i].flag_on.set_value(0.0)

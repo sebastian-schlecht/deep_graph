@@ -1,6 +1,6 @@
 import time
 import datetime
-
+import sys
 from deepgraph.constants import LOG_LEVEL_STRINGS
 from deepgraph.conf import LOG_LEVEL
 
@@ -10,3 +10,5 @@ def log(string, log_level):
     st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
     if LOG_LEVEL >= log_level:
         print("[" + st + "] " + LOG_LEVEL_STRINGS[log_level] + ": " + string)
+        sys.stdout.flush()
+

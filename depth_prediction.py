@@ -18,10 +18,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field)
+    depths = np.array(depth_field[0:10])
 
     images_field = dataset['images']
-    images = np.array(images_field).astype(np.uint8)
+    images = np.array(images_field[0:10]).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -63,11 +63,12 @@ def build_graph():
     lrn_0           = LRN(graph, "lrn_0")
     conv_pool_1     = Conv2DPool(graph, "conv_1", n_channels=256, kernel_shape=(5, 5), pool_size=(3, 3), activation=relu)
     lrn_1           = LRN(graph, "lrn_1")
-    conv_pool_2     = Conv2DPool(graph, "conv_2", n_channels=384, kernel_shape=(3, 3), pool_size=(3, 3), activation=relu)
-    lrn_2           = LRN(graph, "lrn_2")
-    conv_pool_3     = Conv2DPool(graph, "conv_3", n_channels=256, kernel_shape=(3, 3), pool_size=(3, 3), activation=relu)
+    conv_2          = Conv2D(graph, "conv_2", n_channels=384, kernel_shape=(3, 3), activation=relu)
+    conv_3          = Conv2D(graph, "conv_3", n_channels=384, kernel_shape=(3, 3), activation=relu)
+    conv_4          = Conv2DPool(graph, "conv_4", n_channels=256, kernel_shape=(3, 3), pool_size=(3, 3), activation=relu)
     flatten         = Flatten(graph, "flatten", dims=2)
     hidden_0        = FC(graph, "fc_0", n_out=4096)
+    dp_0            = Dropout(graph, "dp_0")
     hidden_1        = FC(graph, "fc_1", n_out=4800)
     rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
 
@@ -78,12 +79,13 @@ def build_graph():
     conv_pool_0.connect(lrn_0)
     lrn_0.connect(conv_pool_1)
     conv_pool_1.connect(lrn_1)
-    lrn_1.connect(conv_pool_2)
-    conv_pool_2.connect(lrn_2)
-    lrn_2.connect(conv_pool_3)
-    conv_pool_3.connect(flatten)
+    lrn_1.connect(conv_2)
+    conv_2.connect(conv_3)
+    conv_3.connect(conv_4)
+    conv_4.connect(flatten)
     flatten.connect(hidden_0)
-    hidden_0.connect(hidden_1)
+    hidden_0.connect(dp_0)
+    dp_0.connect(hidden_1)
     hidden_1.connect(rs)
     rs.connect(loss)
     label.connect(loss)
@@ -93,7 +95,7 @@ def build_graph():
 
 if __name__ == "__main__":
     # data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
-    data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
+    data = load_data('./data/nyu_depth_v2_labeled.mat')
     train_x, val_x = data[0]
     train_y, val_y = data[1]
 
@@ -127,7 +129,7 @@ if __name__ == "__main__":
 
     g = build_graph()
     model_file = "data/model.zip"
-    g.load_weights(model_file)
+    # g.load_weights(model_file)
 
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
     solver = Solver(lr=0.01)
@@ -146,10 +148,11 @@ if __name__ == "__main__":
     solver.optimize(60, print_freq=40)
     log("Saving final model", LOG_LEVEL_INFO)
     g.save(model_file)
-
     log("Testing inference", LOG_LEVEL_INFO)
 
     sample = train_x[4]
+    # Deactivate any dropouts
+    Dropout.set_dp_off()
     print g.infer([sample.reshape((1, 3, 240, 320)).astype(np.float32)])
 
 
