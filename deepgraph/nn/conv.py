@@ -97,7 +97,7 @@ class Conv2D(Node):
         if self.image_shape[0] != -1:
             conv_out = conv2d(
                 input=self.inputs[0].expression,
-                image_shape=self.image_shape,
+                input_shape=self.image_shape,
                 filters=self.W,
                 filter_shape=self.filter_shape,
                 border_mode=self.border_mode,
@@ -209,7 +209,7 @@ class Conv2DPool(Node):
         if self.image_shape[0] != -1:
             conv_out = conv2d(
                 input=self.inputs[0].expression,
-                image_shape=self.image_shape,
+                input_shape=self.image_shape,
                 filters=self.W,
                 filter_shape=self.filter_shape,
                 border_mode=self.border_mode,
