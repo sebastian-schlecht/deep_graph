@@ -49,9 +49,9 @@ class Graph(object):
         #########################################
         self.cost = None
         self.index = T.lscalar('index')                 # index to a [mini]batch
-        self.lr = T.scalar('learning_rate')            # learning rate to use for SGD
-        self.momentum = T.scalar('momentum')            # momentum rate to use
-        self.weight_decay = T.scalar('weight_decay')    # weight decay to use
+        self.lr = T.scalar('learning_rate', dtype=theano.config.floatX)            # learning rate to use for SGD
+        self.momentum = T.scalar('momentum', dtype=theano.config.floatX)            # momentum rate to use
+        self.weight_decay = T.scalar('weight_decay', dtype=theano.config.floatX)    # weight decay to use
         self.last_updates = []  # Array to buffer the last weight update for use with momentum
         #########################################
         # Model we use for training, testing and validation
@@ -301,15 +301,16 @@ class Graph(object):
 
 class Node(object):
     """
-    Generic node class
+    Generic node class. Implements the new config object pattern
     """
-    def __init__(self, graph, name, is_output=False, phase=PHASE_ALL):
+    def __init__(self, graph, name, is_output=False, phase=PHASE_ALL, config={}):
         """
         Constructor
         :param graph: Graph
         :param name: String
         :param is_output: Bool
         :param phase: Int
+        :param config: Dict
         :return: Node
         """
         if graph is None:
@@ -344,6 +345,8 @@ class Node(object):
         self.output_shape = None
         # Phase definition
         self.phase = phase
+        # Config properties
+        self.config = config
         # Add to graph
         graph.add(self)
 
@@ -413,3 +416,14 @@ class Node(object):
             raise TypeError("Successor node has to be of a derivative of type 'Node'")
         self.outputs.append(successor)
         successor.inputs.append(self)
+
+    def conf(self, key):
+        """
+        Read a key from the config dictionary
+        :param key: String
+        :return: Any value
+        """
+        if key in self.config:
+            return self.config[key]
+        else:
+            return None

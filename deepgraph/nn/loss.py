@@ -66,8 +66,7 @@ class L1RegularizationLoss(Node):
         if not (self.inputs[0].W is not None and self.inputs[1].W is not None):
             raise AssertionError("L1 Regularization needs two nodes with weights as preceeding nodes")
         self.expression = (
-            abs(self.inputs[0].W).sum()
-            + abs(self.inputs[1].W).sum()
+            abs(self.inputs[0].W).sum() + abs(self.inputs[1].W).sum()
         )
 
 
@@ -96,8 +95,7 @@ class L2RegularizationLoss(Node):
         if not (self.inputs[0].W is not None and self.inputs[1].W is not None):
             raise AssertionError("L2 Regularization needs two nodes with weights as preceeding nodes")
         self.expression = (
-            (self.inputs[0].W ** 2).sum()
-            + (self.inputs[1].W ** 2).sum()
+            (self.inputs[0].W ** 2).sum() + (self.inputs[1].W ** 2).sum()
         )
 
 
@@ -129,15 +127,17 @@ class LogarithmicScaleInvariantLoss(Node):
             in_0 = self.inputs[0].expression
             in_1 = self.inputs[1].expression
             eps = 0.00001
-            MAX = 1000000000000
+            MAX = 1000000
+            # TODO Eval T.clip() here. It should be less of a problem with last layer relu units though
+            # TODO It may return during scale two though
             diff = T.log(T.clip(in_0, eps, MAX)) - T.log(T.clip(in_1, eps, MAX))
-            # Todo implement scale invariant error
-            self.expression = T.mean(diff**2)
+            self.expression = T.mean(diff**2) - ((self.lambda_factor / (in_0.shape[0]**2)) * (T.sum(diff)**2))
 
 
 class EuclideanLoss(Node):
     """
-    Computes the loss according to the euclidean distance of the input tensors
+    Computes the loss according to the mean euclidean distance of the input tensors
+    Equivalent to mean squared error (MSE)
     """
     def __init__(self, graph, name, loss_weight=1.0, is_output=True, phase=PHASE_TRAIN):
             """

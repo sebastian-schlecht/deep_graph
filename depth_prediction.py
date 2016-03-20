@@ -18,10 +18,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:20])
+    depths = np.array(depth_field[0:11])
 
     images_field = dataset['images']
-    images = np.array(images_field[0:20]).astype(np.uint8)
+    images = np.array(images_field[0:11]).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -32,8 +32,8 @@ def load_data(db_file):
     img_scale = 0.5
     depth_scale = 0.125
 
-    images_sized = np.zeros((images.shape[0],images.shape[1], int(images.shape[2]*img_scale), int(images.shape[3]*img_scale)), dtype=np.uint8)
-    depths_sized = np.zeros((depths.shape[0],int(depths.shape[1]*depth_scale), int(depths.shape[2]*depth_scale)), dtype=np.float32)
+    images_sized = np.zeros((images.shape[0], images.shape[1], int(images.shape[2]*img_scale), int(images.shape[3]*img_scale)), dtype=np.uint8)
+    depths_sized = np.zeros((depths.shape[0], int(depths.shape[1]*depth_scale), int(depths.shape[2]*depth_scale)), dtype=np.float32)
 
     for i in range(len(images)):
         ii = imresize(images[i], img_scale)
@@ -67,10 +67,10 @@ def build_graph():
     conv_3          = Conv2D(graph, "conv_3", n_channels=384, kernel_shape=(3, 3), border_mode=1, activation=relu)
     conv_4          = Conv2DPool(graph, "conv_4", n_channels=256, kernel_shape=(3, 3), border_mode=1, pool_size=(3, 3), activation=relu)
     flatten         = Flatten(graph, "flatten", dims=2)
-    hidden_0        = FC(graph, "fc_0", n_out=4096, activation=relu)
+    hidden_0        = FC(graph, "fc_0", n_out=4096, activation=None)
     # dp_0            = Dropout(graph, "dp_0")
-    hidden_1        = FC(graph, "fc_2", n_out=4096, activation=relu)
-    hidden_2        = FC(graph, "fc_1", n_out=4800, activation=relu)
+    hidden_1        = FC(graph, "fc_2", n_out=4096, activation=None)
+    hidden_2        = FC(graph, "fc_1", n_out=4800, activation=None)
     rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
 
     loss            = EuclideanLoss(graph, "loss")
@@ -111,48 +111,49 @@ if __name__ == "__main__":
 
     # X
     # Scale into 0-1 range
-    train_x = train_x.astype(np.float)
-    train_x *= 0.003921
+    # train_x = train_x.astype(np.float)
+    # train_x *= 0.003921
     # Subtract mean
-    train_mean = np.mean(train_x, axis=0)
-    idx = 0
-    for element in train_x:
-        train_x[idx] = train_x[idx] - train_mean
-        idx += 1
+    train_mean = np.mean(train_x, axis=0, dtype=np.uint8)
+    for i in range(train_x.shape[0]):
+        train_x[i] = train_x[i] - train_mean
     # Y
     # Scale down by 100
-    train_y *= 0.01
+    #train_y *= 0.01
 
     # Wrap data into theano shared variables
-    var_train_x = common.wrap_shared(train_x)
+    var_train_x = common.wrap_shared(train_x.astype(np.float32))
     var_train_y = common.wrap_shared(train_y)
 
-    var_val_x = common.wrap_shared(val_x)
+    var_val_x = common.wrap_shared(val_x.astype(np.float32))
     var_val_y = common.wrap_shared(val_y)
 
-    batch_size = 64
+    batch_size = 5
 
     g = build_graph()
     model_file = "data/model.zip"
     # g.load_weights(model_file)
 
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    solver = Solver(lr=0.1)
+    base_lr = 0.0000001
+    solver = Solver(lr=base_lr)
     solver.load(g)
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
-    solver.optimize(200, print_freq=40)
+    solver.optimize(1000, print_freq=40)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    g.save(model_file)
+    #g.save(model_file)
     log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
-    solver.learning_rate = 0.01
-    solver.optimize(200, print_freq=40)
+    base_lr /= 10
+    solver.learning_rate = base_lr
+    solver.optimize(1000, print_freq=40)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    g.save(model_file)
+    #g.save(model_file)
     log("Starting optimization phase 3/3", LOG_LEVEL_INFO)
-    solver.learning_rate = 0.001
-    solver.optimize(200, print_freq=40)
+    base_lr /= 10
+    solver.learning_rate = base_lr
+    solver.optimize(1000, print_freq=40)
     log("Saving final model", LOG_LEVEL_INFO)
-    g.save(model_file)
+    #g.save(model_file)
     log("Testing inference", LOG_LEVEL_INFO)
 
 

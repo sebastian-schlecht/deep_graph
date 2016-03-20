@@ -14,7 +14,7 @@ val_x, val_y = data[1]
 batch_size = 600
 
 g = Graph("test")
-g.load_weights("data/model.zip")
+#g.load_weights("data/model.zip")
 
 # Until now, sequence matters to map inputs to compiled model inlets
 # In addition, we need to specify the shape we want to have the input in such that deepgraph
@@ -54,7 +54,7 @@ g.compile(train_inputs=[train_x, train_y], val_inputs=[val_x, val_y], batch_size
 log("Starting optimization phase", LOG_LEVEL_INFO)
 solver = Solver(lr=0.1)
 solver.load(g)
-solver.optimize(1)
+solver.optimize(10)
 log("Saving model", LOG_LEVEL_INFO)
 g.save("data/model.zip")
 

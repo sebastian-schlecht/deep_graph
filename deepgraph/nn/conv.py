@@ -2,12 +2,12 @@ import numpy as np
 import theano
 import theano.tensor as T
 from theano.tensor.nnet import conv2d
-from theano.tensor.signal import downsample
 from theano.tensor.nnet.abstract_conv import get_conv_output_shape
+from theano.tensor.signal.pool import Pool as TPool, pool_2d
 
 from deepgraph.graph import Node
 from deepgraph.constants import *
-from deepgraph.conf import rng
+from deepgraph.nn.init import (normal, constant)
 
 __docformat__ = 'restructedtext en'
 
@@ -23,7 +23,6 @@ class Conv2D(Node):
         :param name: String
         :param n_channels: Int
         :param kernel_shape: Tuple
-        :param pool_size:  Tuple
         :param border_mode: String or Tuple
         :param subsample: Int or Tuple
         :param activation: theano.elemwise
@@ -47,10 +46,11 @@ class Conv2D(Node):
         self.filter_shape = None
         self.image_shape = None
         self.activation = activation
+
     def alloc(self):
         # Compute filter shapes and image shapes
         if len(self.inputs) != 1:
-            raise AssertionError("Conv nodes only support one input")
+            raise AssertionError("Conv nodes only support one input.")
         in_shape = self.inputs[0].output_shape
         self.image_shape = in_shape
         self.filter_shape = (
@@ -65,16 +65,13 @@ class Conv2D(Node):
         #   pooling size
         if self.W is None:
             self.W = theano.shared(
-                np.asarray(
-                    rng.normal(0, 0.01, size=self.filter_shape),
-                    dtype=theano.config.floatX
-                ),
+                normal()(size=self.filter_shape),
                 name='W_conv',
                 borrow=True
             )
+
         if self.b is None:
-            b_values = np.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
-            self.b = theano.shared(value=b_values,name="b_conv", borrow=True)
+            self.b = theano.shared(value=constant(1)(self.filter_shape[0]), name="b_conv", borrow=True)
         # These are the params to be updated
         self.params = [self.W, self.b]
         ##############
@@ -121,7 +118,19 @@ class Conv2DPool(Node):
     """
     Combination of convolution and pooling for ConvNets
     """
-    def __init__(self, graph, name, n_channels, kernel_shape, pool_size=(2, 2), border_mode='valid', subsample=(1, 1), activation=T.tanh, lr=1, is_output=False, phase=PHASE_ALL):
+    def __init__(self,
+                 graph,
+                 name,
+                 n_channels,
+                 kernel_shape,
+                 pool_size=(2, 2),
+                 pool_stride=None,
+                 border_mode='valid',
+                 subsample=(1, 1),
+                 activation=T.tanh,
+                 lr=1,
+                 is_output=False,
+                 phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -152,12 +161,13 @@ class Conv2DPool(Node):
         self.filter_shape = None
         self.image_shape = None
         self.pool_size = pool_size
+        self.pool_stride = pool_stride
         self.activation = activation
 
     def alloc(self):
         # Compute filter shapes and image shapes
         if len(self.inputs) != 1:
-            raise AssertionError("Conv nodes only support one input")
+            raise AssertionError("Conv nodes only support one input.")
         in_shape = self.inputs[0].output_shape
         self.image_shape = in_shape
         self.filter_shape = (
@@ -167,26 +177,18 @@ class Conv2DPool(Node):
                     self.kernel_shape[1]
                             )
 
-        fan_in = np.prod(self.filter_shape[1:])
-        fan_out = (self.filter_shape[0] * np.prod(self.filter_shape[2:]) //
-                   np.prod(self.pool_size))
         assert self.image_shape[1] == self.filter_shape[1]
         # each unit in the lower layer receives a gradient from:
         # "num output feature maps * filter height * filter width" /
         #   pooling size
         if self.W is None:
-            W_bound = np.sqrt(6. / (fan_in + fan_out))
             self.W = theano.shared(
-                np.asarray(
-                    rng.normal(0, 0.01, size=self.filter_shape),
-                    dtype=theano.config.floatX
-                ),
+                normal()(size=self.filter_shape),
                 name='W_conv',
                 borrow=True
             )
         if self.b is None:
-            b_values = np.zeros((self.filter_shape[0],), dtype=theano.config.floatX)
-            self.b = theano.shared(value=b_values,name="b_conv", borrow=True)
+            self.b = theano.shared(value=constant(0)(self.filter_shape[0]), name="b_conv", borrow=True)
         # These are the params to be updated
         self.params = [self.W, self.b]
         ##############
@@ -203,7 +205,7 @@ class Conv2DPool(Node):
 
     def forward(self):
         if len(self.inputs) > 1:
-            raise AssertionError("ConvPool layer can only have one input")
+            raise AssertionError("ConvPool layer can only have one input.")
 
         # Use optimization in case the number of samples is constant during compilation
         if self.image_shape[0] != -1:
@@ -224,15 +226,74 @@ class Conv2DPool(Node):
                 subsample=self.subsample
             )
         # downsample each feature map individually, using maxpooling
-        pooled_out = downsample.max_pool_2d(
+        pooled_out = pool_2d(
             input=conv_out,
             ds=self.pool_size,
+            st=self.pool_stride,
             ignore_border=True
         )
         # Build final expression
         if self.activation is None:
             raise AssertionError("Conv/Pool nodes need an activation function.")
         self.expression = self.activation(pooled_out + self.b.dimshuffle('x', 0, 'x', 'x'))
+
+
+class Upsample(Node):
+    """
+    Upsample the input tensor along axis 2 and 3. The previous node has to provide 4D output
+    """
+    def __init__(self, graph, name, kernel_size=(2, 2), is_output=False, phase=PHASE_ALL):
+        super(Upsample, self).__init__(self, graph, name, is_output=is_output, phase=phase)
+        self.kernel_size = kernel_size
+
+    def alloc(self):
+        if len(self.inputs) > 1:
+            raise AssertionError("Unpool nodes only support one input.")
+        in_shape = self.inputs[0].output_shape
+        if len(in_shape) != 4:
+            raise AssertionError("Input has to be 4D.")
+        if in_shape[3] == 0 or in_shape[4] == 0:
+            raise AssertionError("Input shape is invalid.")
+        self.output_shape = (in_shape[0], in_shape[1], in_shape[2] * self.kernel_size[0], in_shape[3] * self.kernel_size[1])
+
+    def forward(self):
+        _in = self.inputs[0].expression
+        self.expression = _in.repeat(self.kernel_size[0], axis=2).repeat(self.kernel_size[1], axis=3)
+
+
+class Pool(Node):
+    """
+    Downsample using the Theano pooling module
+    """
+    def __init__(self, graph, name, kernel_size=(2, 2), ignore_border= True, stride=None,padding=(0,0), mode='max', is_output=False, phase=PHASE_ALL):
+        super(Pool, self).__init__(self, graph, name, is_output=is_output, phase=phase)
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.ignore_border = ignore_border
+        self.padding = padding
+        self.mode = mode
+
+    def alloc(self):
+        if len(self.inputs) > 1:
+            raise AssertionError("Pool nodes only support one input.")
+        in_shape = self.inputs[0].output_shape
+        if len(in_shape) != 4:
+            raise AssertionError("Input has to be 4D.")
+        if in_shape[3] == 0 or in_shape[4] == 0:
+            raise AssertionError("Input shape is invalid.")
+
+        # Invoke theano internal function for shape computation
+        self.output_shape = TPool.out_shape(
+            in_shape,
+            self.kernel_size,
+            self.ignore_border,
+            self.stride,
+            self.padding
+        )
+
+    def forward(self):
+        _in = self.inputs[0].expression
+        self.expression = pool_2d(_in, self.kernel_size, self.ignore_border, self.stride, self.padding, self.mode)
 
 
 class LRN(Node):
@@ -256,7 +317,7 @@ class LRN(Node):
         """
         super(LRN, self).__init__(graph, name, is_output=is_output, phase=phase)
         if n % 2 == 0:
-            raise NotImplementedError("Only works with odd n for now")
+            raise NotImplementedError("Only works with odd n for now.")
 
         self.alpha = alpha
         self.k = k
@@ -278,12 +339,12 @@ class LRN(Node):
 
         extra_channels = T.alloc(0., ch + 2*half, r, c, b)
 
-        sq = T.set_subtensor(extra_channels[half:half+ch,:,:,:], sq)
+        sq = T.set_subtensor(extra_channels[half:half+ch, :, :, :], sq)
 
         scale = self.k
 
         for i in xrange(self.n):
-            scale += self.alpha * sq[i:i+ch,:,:,:]
+            scale += self.alpha * sq[i:i+ch, :, :, :]
 
         scale = scale ** self.beta
 

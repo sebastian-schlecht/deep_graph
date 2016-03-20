@@ -5,6 +5,7 @@ import theano.tensor as T
 from deepgraph.graph import Node
 from deepgraph.conf import rng
 from deepgraph.constants import *
+from deepgraph.nn.init import normal, constant
 
 __docformat__ = 'restructedtext en'
 
@@ -112,20 +113,14 @@ class Softmax(Node):
         # Init weights
         if self.W is None:
             self.W = theano.shared(
-                value=np.zeros(
-                    (self.n_in, self.n_out),
-                    dtype=theano.config.floatX
-                ),
+                value=constant(0)((self.n_in,self.n_out)),
                 name='W',
                 borrow=True
             )
         if self.b is None:
             # Init bias
             self.b = theano.shared(
-                value=np.zeros(
-                    (self.n_out,),
-                    dtype=theano.config.floatX
-                ),
+                value=constant(0)(self.n_out),
                 name='b',
                 borrow=True
             )
@@ -250,9 +245,7 @@ class FC(Node):
 
         if self.W is None:
             # Alloc mem for the weights
-            W_values = np.asarray(
-                rng.normal(0, 0.01, size=(self.n_in, self.n_out)
-            ), dtype=theano.config.floatX)
+            W_values = normal()((self.n_in, self.n_out))
             if self.activation == theano.tensor.nnet.sigmoid:
                 W_values *= 4
             W = theano.shared(value=W_values, name='W', borrow=True)
@@ -260,11 +253,13 @@ class FC(Node):
             self.W = W
         # Bias
         if self.b is None:
-            b_values = np.zeros((self.n_out,), dtype=theano.config.floatX)
+            b_values = constant(0)(self.n_out)
             b = theano.shared(value=b_values, name='b', borrow=True)
             self.b = b
         # Parameters which should be updated during steps
         self.params = [self.W, self.b]
+        # Out shape
+        self.output_shape = (self.inputs[0].output_shape[0], self.n_out)
 
     def forward(self):
         if len(self.inputs) != 1:
@@ -274,7 +269,7 @@ class FC(Node):
             lin_output if self.activation is None
             else self.activation(lin_output)
         )
-        self.output_shape = (self.inputs[0].output_shape[0], self.n_out)
+
 
 
 class Error(Node):

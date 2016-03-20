@@ -1,5 +1,5 @@
 from scipy.misc import imresize
-import cv2
+# import cv2
 from skimage import exposure
 from skimage import transform
 from PIL import Image
@@ -31,7 +31,7 @@ def imbatchresize(array, scale):
         imgs_sized[i] = np.swapaxes(np.swapaxes(ii, 1, 2), 0, 1)
 
 
-def noise_transformer(image, std):
+def noise_transformer(image, intensity= 0.1, mean=0, std=0.01):
     """
     Add random noise to a given image
     :param image: np.array
@@ -39,64 +39,35 @@ def noise_transformer(image, std):
     :return: np.array
     """
     image = image.copy()
-    noise = np.random.randn(*image.shape)*std
-    image = image + noise
-    return image
+    noise = np.random.normal(mean, std, size=image.shape)
+    image = image + (noise * intensity)
+    return image.astype(np.uint8)
 
 
-def rotation_transformer_rgb(image, angle):
+
+def flip_transformer_s(image, direction):
     """
-    Rotate an RGB image by a given angle
-    :param image: np.array
-    :param angle: Int
-    :return:
+    Flip a greyscale image/array
+    :param image: Image/Array
+    :param direction: Flip dir
+    :return: NDArray
     """
-    assert image.shape[0] == 3
-    i = image.copy().transpose((1,2,0))
-    rows, cols, _ = i.shape
-    rotation = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
-    image = cv2.warpAffine(i, rotation, (cols, rows))    # returns a copy
-    return image
+    if direction is 'h':
+        return image[:, ::-1]
+    else:
+        return image[::-1, :]
 
-
-def rotation_transformer(image, angle):
+def flip_transformer_rgb(image, direction):
     """
-    Rotate an arbitrary image with 1 channel
-    :param image: np.array
-    :param angle: Int
-    :return:
-    """
-    i = image.copy()
-    rows, cols = i.shape
-    rotation = cv2.getRotationMatrix2D((cols/2,rows/2), angle, 1)
-    image = cv2.warpAffine(i, rotation, (cols,rows)) #returns a copy
-    return image
-
-
-def flip_transformer(image, direction):
-    """
-    Flit an image alongside an axis
+    Flit a RGB image alongside an axis
     :param image: np.array
     :param direction: String
-    :return:
+    :return: NDArray
     """
-    flipcode = 1 if direction=='horizontal' else 0
-    image = cv2.flip(image, flipcode)
-    return image
-
-
-def translate_transformer(image, offset_x, offset_y):
-    """
-    Translate image
-    :param image: np.array
-    :param offset_x: Int
-    :param offset_y: Int
-    :return: np.array
-    """
-    rows, cols, _ = image.shape
-    translate_matrix = np.float32([[1,0,offset_x],[0,1,offset_y]])
-    image = cv2.warpAffine(image, translate_matrix, (cols, rows))
-    return image
+    if direction is 'h':
+        return image[:, :, ::-1]
+    else:
+        return image[:, ::-1, :]
 
 
 def exposure_transformer(img, level):
