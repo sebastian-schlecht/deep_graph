@@ -99,7 +99,7 @@ class Conv2D(Node):
                 filter_shape=self.filter_shape,
                 border_mode=self.border_mode,
                 subsample=self.subsample
-            )
+            ) + self.b.dimshuffle('x', 0, 'x', 'x')
         else:
             conv_out = conv2d(
                 input=self.inputs[0].expression,
@@ -107,11 +107,11 @@ class Conv2D(Node):
                 filter_shape=self.filter_shape,
                 border_mode=self.border_mode,
                 subsample=self.subsample
-            )
+            ) + self.b.dimshuffle('x', 0, 'x', 'x')
         # Build final expression
         if self.activation is None:
             raise AssertionError("Conv/Pool nodes need an activation function.")
-        self.expression = self.activation(conv_out + self.b.dimshuffle('x', 0, 'x', 'x'))
+        self.expression = self.activation(conv_out )
 
 
 class Conv2DPool(Node):
@@ -201,7 +201,16 @@ class Conv2DPool(Node):
         # But we also do pooling, keep that in mind
         # When propagating data, we keep the n in (n,c,h,w) fixed to -1 to make theano
         # infer it during runtime
-        self.output_shape = (in_shape[0], self.output_shape[1], self.output_shape[2] / self.pool_size[0], self.output_shape[3] / self.pool_size[1])
+        intermediate = (1, self.output_shape[1], self.output_shape[2], self.output_shape[3])
+        # Include pooling
+        self.output_shape = TPool.out_shape(
+            intermediate,
+            self.pool_size,
+            True,
+            self.pool_stride,
+        )
+        self.output_shape = (in_shape[0], self.output_shape[1], self.output_shape[2], self.output_shape[3])
+        pass
 
     def forward(self):
         if len(self.inputs) > 1:
@@ -216,7 +225,7 @@ class Conv2DPool(Node):
                 filter_shape=self.filter_shape,
                 border_mode=self.border_mode,
                 subsample=self.subsample
-            )
+            ) + self.b.dimshuffle('x', 0, 'x', 'x')
         else:
             conv_out = conv2d(
                 input=self.inputs[0].expression,
@@ -224,7 +233,7 @@ class Conv2DPool(Node):
                 filter_shape=self.filter_shape,
                 border_mode=self.border_mode,
                 subsample=self.subsample
-            )
+            ) + self.b.dimshuffle('x', 0, 'x', 'x')
         # downsample each feature map individually, using maxpooling
         pooled_out = pool_2d(
             input=conv_out,
@@ -235,7 +244,7 @@ class Conv2DPool(Node):
         # Build final expression
         if self.activation is None:
             raise AssertionError("Conv/Pool nodes need an activation function.")
-        self.expression = self.activation(pooled_out + self.b.dimshuffle('x', 0, 'x', 'x'))
+        self.expression = self.activation(pooled_out)
 
 
 class Upsample(Node):

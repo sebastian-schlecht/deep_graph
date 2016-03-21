@@ -59,18 +59,56 @@ def build_graph():
     data            = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
     label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), phase=PHASE_TRAIN)
 
-    conv_pool_0     = Conv2DPool(graph, "conv_0", n_channels=96, kernel_shape=(11, 11), subsample=(4, 4), pool_size=(3, 3), activation=relu)
+    conv_pool_0     = Conv2DPool(
+        graph,
+        "conv_0",
+        n_channels=96,
+        kernel_shape=(11, 11),
+        subsample=(4, 4),
+        pool_size=(3, 3),
+        activation=relu
+    )
     lrn_0           = LRN(graph, "lrn_0")
-    conv_pool_1     = Conv2DPool(graph, "conv_1", n_channels=256, kernel_shape=(5, 5), border_mode=2, pool_size=(3, 3), activation=relu)
+    conv_pool_1     = Conv2DPool(
+        graph,
+        "conv_1",
+        n_channels=256,
+        kernel_shape=(5, 5),
+        border_mode=2,
+        pool_size=(3, 3),
+        activation=relu
+    )
     lrn_1           = LRN(graph, "lrn_1")
-    conv_2          = Conv2D(graph, "conv_2", n_channels=384, kernel_shape=(3, 3), border_mode=1, activation=relu)
-    conv_3          = Conv2D(graph, "conv_3", n_channels=384, kernel_shape=(3, 3), border_mode=1, activation=relu)
-    conv_4          = Conv2DPool(graph, "conv_4", n_channels=256, kernel_shape=(3, 3), border_mode=1, pool_size=(3, 3), activation=relu)
+    conv_2          = Conv2D(
+        graph,
+        "conv_2",
+        n_channels=384,
+        kernel_shape=(3, 3),
+        border_mode=1,
+        activation=relu
+    )
+    conv_3          = Conv2D(
+        graph,
+        "conv_3",
+        n_channels=384,
+        kernel_shape=(3, 3),
+        border_mode=1,
+        activation=relu
+     )
+    conv_4          = Conv2DPool(
+        graph,
+        "conv_4",
+        n_channels=256,
+        kernel_shape=(3, 3),
+        border_mode=1,
+        pool_size=(3, 3),
+        activation=relu
+    )
     flatten         = Flatten(graph, "flatten", dims=2)
     hidden_0        = FC(graph, "fc_0", n_out=4096, activation=None)
     # dp_0            = Dropout(graph, "dp_0")
     hidden_1        = FC(graph, "fc_2", n_out=4096, activation=None)
-    hidden_2        = FC(graph, "fc_1", n_out=4800, activation=None)
+    hidden_2        = FC(graph, "fc_1", n_out=4800, activation=relu)
     rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
 
     loss            = EuclideanLoss(graph, "loss")
@@ -135,11 +173,11 @@ if __name__ == "__main__":
     # g.load_weights(model_file)
 
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    base_lr = 0.0000001
+    base_lr = 0.00001
     solver = Solver(lr=base_lr)
     solver.load(g)
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
-    solver.optimize(1000, print_freq=40)
+    solver.optimize(1000, print_freq=1)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
     #g.save(model_file)
     log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
