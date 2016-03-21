@@ -19,10 +19,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:11])
+    depths = np.array(depth_field[0:260])
 
     images_field = dataset['images']
-    images = np.array(images_field[0:11]).astype(np.uint8)
+    images = np.array(images_field[0:260]).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -56,28 +56,7 @@ def load_data(db_file):
 
 def build_graph():
     graph = Graph("depth_predictor")
-    """
-    data            = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
-    label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), phase=PHASE_TRAIN)
-
-    conv_pool_0     = Conv2DPool(graph, "conv_0", n_channels=96, kernel_shape=(11, 11), subsample=(4, 4), pool_size=(3, 3), activation=relu)
-    lrn_0           = LRN(graph, "lrn_0")
-    conv_pool_1     = Conv2DPool(graph, "conv_1", n_channels=256, kernel_shape=(5, 5), border_mode=2, pool_size=(3, 3), activation=relu)
-    lrn_1           = LRN(graph, "lrn_1")
-    conv_2          = Conv2D(graph, "conv_2", n_channels=384, kernel_shape=(3, 3), border_mode=1, activation=relu)
-    conv_3          = Conv2D(graph, "conv_3", n_channels=384, kernel_shape=(3, 3), border_mode=1, activation=relu)
-    conv_4          = Conv2DPool(graph, "conv_4", n_channels=256, kernel_shape=(3, 3), border_mode=1, pool_size=(3, 3), activation=relu)
-    flatten         = Flatten(graph, "flatten", dims=2)
-    hidden_0        = FC(graph, "fc_0", n_out=4096, activation=None)
-    # dp_0            = Dropout(graph, "dp_0")
-    hidden_1        = FC(graph, "fc_2", n_out=4096, activation=None)
-    hidden_2        = FC(graph, "fc_1", n_out=4800, activation=None)
-    rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
-
-    loss            = EuclideanLoss(graph, "loss")
-    l1 = L2RegularizationLoss(graph, "l1", loss_weight=0.001)
-    """
-    data = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
+    data_in = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
     label = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), config={
         "phase": PHASE_TRAIN
     })
@@ -93,7 +72,9 @@ def build_graph():
     lrn_1 = LRN(graph, "lrn_1")
 
     pool_1 = Pool(graph, "pool_1", config={
-        "kernel_size": (2, 2)
+        "kernel_size": (3, 3),
+        "stride": (2, 2),
+        "ignore_border": True
     })
 
 
@@ -102,12 +83,14 @@ def build_graph():
         "border_mode": (2, 2),
         "kernel_shape": (5, 5),
         "weight_filler": normal(),
-        "bias_filler": constant(0.1),
+        "bias_filler": constant(1),
         "activation": relu
     })
 
     pool_2 = Pool(graph, "pool_2", config={
-        "kernel_size": (2, 2),
+        "kernel_size": (3, 3),
+        "stride": (2, 2),
+        "ignore_border": True
     })
 
     lrn_2 = LRN(graph, "lrn_2")
@@ -125,7 +108,7 @@ def build_graph():
         "border_mode": (1, 1),
         "kernel_shape": (3, 3),
         "weight_filler": normal(),
-        "bias_filler": constant(0.1),
+        "bias_filler": constant(1),
         "activation": relu
     })
     conv_5 = Conv2D(graph, "conv_5", config={
@@ -133,14 +116,15 @@ def build_graph():
         "border_mode": (1, 1),
         "kernel_shape": (3, 3),
         "weight_filler": normal(),
-        "bias_filler": constant(0.1),
+        "bias_filler": constant(1),
         "activation": relu
     })
 
     pool_5 = Pool(graph, "pool_5", config={
-        "kernel_size": (2, 2)
+        "kernel_size": (3, 3),
+        "stride": (2, 2),
+        "ignore_border": True
     })
-
 
     flatten_5 = Flatten(graph, "flatten_5", config={
         "dims": 2
@@ -148,9 +132,9 @@ def build_graph():
 
     fc6 = Dense(graph, "fc6", config={
         "n_out": 4096,
-        "activation": relu,
-        "weight_filler": constant(0),
-        "bias_filler": constant(0)
+        "activation": None,
+        "weight_filler": normal(0, 0.005),
+        "bias_filler": constant(1)
     })
 
     #dp6 = Dropout(graph, "dp6")
@@ -158,8 +142,8 @@ def build_graph():
     fc7 = Dense(graph, "fc7", config={
         "n_out": 4096,
         "activation": None,
-        "weight_filler": constant(0),
-        "bias_filler": constant(0)
+        "weight_filler": normal(0, 0.005),
+        "bias_filler": constant(1)
     })
 
     # dp7 = Dropout(graph, "dp7")
@@ -167,8 +151,8 @@ def build_graph():
     fc8 = Dense(graph, "fc8", config={
         "n_out": 4800,
         "activation": relu,
-        "weight_filler": normal(0, 0.01),
-        "bias_filler": constant(0),
+        "weight_filler": normal(),
+        "bias_filler": constant(0.1),
         "is_output": True
     })
 
@@ -179,7 +163,7 @@ def build_graph():
     loss = EuclideanLoss(graph, "loss")
 
     # Make connections
-    data.connect(conv_1)
+    data_in.connect(conv_1)
 
     conv_1.connect(lrn_1)
     lrn_1.connect(pool_1)
@@ -195,13 +179,8 @@ def build_graph():
 
     fc6.connect(fc7)
     fc7.connect(fc8)
-    """
-    fc6.connect(dp6)
-    dp6.connect(fc7)
-    fc7.connect(dp7)
-    dp7.connect(fc8)
-    """
     fc8.connect(rs9)
+
     rs9.connect(loss)
     label.connect(loss)
 
@@ -241,14 +220,14 @@ if __name__ == "__main__":
     var_val_x = common.wrap_shared(val_x.astype(np.float32))
     var_val_y = common.wrap_shared(val_y)
 
-    batch_size = 5
+    batch_size = 64
 
     g = build_graph()
     model_file = "data/model.zip"
     # g.load_weights(model_file)
 
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    base_lr = 0.00000001
+    base_lr = 0.001
     solver = Solver(lr=base_lr)
     solver.load(g)
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)

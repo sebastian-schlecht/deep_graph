@@ -177,7 +177,7 @@ class Graph(object):
                     outputs=outputs,
                     updates=updates,
                     givens=givens,
-                    mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
+                    # mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
                 )
                 self.compiled_with_var = True
                 #########################################

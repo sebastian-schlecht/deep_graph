@@ -136,7 +136,7 @@ class Conv2DPool(Node):
         self.set_conf_default("subsample", (1, 1))
         self.set_conf_default("n_channels", 1)
         self.set_conf_default("kernel_shape", (2, 2))
-        self.set_conf_default("pool_size", (2, 2))
+        self.set_conf_default("pool_size", (3, 3))
         self.set_conf_default("pool_stride", None)
         self.set_conf_default("ignore_border", True)
         self.set_conf_default("border_mode", "valid")
@@ -272,7 +272,7 @@ class Pool(Node):
     """
     def __init__(self, graph, name, config={}):
         super(Pool, self).__init__(graph, name, config)
-        self.set_conf_default("kernel_size", (2, 2))
+        self.set_conf_default("kernel_size", (3, 3))
         self.set_conf_default("ignore_border", True)
         self.set_conf_default("stride", None)
         self.set_conf_default("padding", (0, 0))
@@ -303,7 +303,7 @@ class Pool(Node):
             ds=self.conf("kernel_size"),
             ignore_border=self.conf("ignore_border"),
             st=self.conf("stride"),
-            #padding=self.conf("padding"),
+            padding=self.conf("padding"),
             mode=self.conf("mode")
         )
 
