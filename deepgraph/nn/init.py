@@ -50,7 +50,7 @@ def constant(value=1, dtype=theano.config.floatX):
     :return:
     """
     def gen(size):
-        arr = np.empty(size, dtype=dtype)
+        arr = np.zeros(size, dtype=dtype)
         arr.fill(value)
         return arr
     return gen

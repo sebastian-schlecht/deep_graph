@@ -3,6 +3,7 @@ from scipy.misc import imresize
 
 from theano.tensor.nnet import relu
 
+
 from deepgraph.utils import common
 from deepgraph.graph import *
 from deepgraph.nn.core import *
@@ -55,7 +56,7 @@ def load_data(db_file):
 
 def build_graph():
     graph = Graph("depth_predictor")
-
+    """
     data            = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
     label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), phase=PHASE_TRAIN)
 
@@ -75,25 +76,134 @@ def build_graph():
 
     loss            = EuclideanLoss(graph, "loss")
     l1 = L2RegularizationLoss(graph, "l1", loss_weight=0.001)
+    """
+    data = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
+    label = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), config={
+        "phase": PHASE_TRAIN
+    })
 
-    # Connect
-    data.connect(conv_pool_0)
-    conv_pool_0.connect(lrn_0)
-    lrn_0.connect(conv_pool_1)
-    conv_pool_1.connect(lrn_1)
-    lrn_1.connect(conv_2)
-    conv_2.connect(conv_3)
+    conv_1 = Conv2D(graph, "conv_1", config={
+        "n_channels": 96,
+        "kernel_shape": (11, 11),
+        "subsample": (4, 4),     # Stride
+        "activation": relu,
+        "weight_filler": normal(),
+        "bias_filler": constant(0)
+    })
+    lrn_1 = LRN(graph, "lrn_1")
+
+    pool_1 = Pool(graph, "pool_1", config={
+        "kernel_size": (2, 2)
+    })
+
+
+    conv_2 = Conv2D(graph, "conv_2", config={
+        "n_channels": 256,
+        "border_mode": (2, 2),
+        "kernel_shape": (5, 5),
+        "weight_filler": normal(),
+        "bias_filler": constant(0.1),
+        "activation": relu
+    })
+
+    pool_2 = Pool(graph, "pool_2", config={
+        "kernel_size": (2, 2),
+    })
+
+    lrn_2 = LRN(graph, "lrn_2")
+
+    conv_3 = Conv2D(graph, "conv_3", config={
+        "n_channels": 384,
+        "border_mode": (1, 1),
+        "kernel_shape": (3, 3),
+        "weight_filler": normal(),
+        "bias_filler": constant(0),
+        "activation": relu
+    })
+    conv_4 = Conv2D(graph, "conv_4", config={
+        "n_channels": 384,
+        "border_mode": (1, 1),
+        "kernel_shape": (3, 3),
+        "weight_filler": normal(),
+        "bias_filler": constant(0.1),
+        "activation": relu
+    })
+    conv_5 = Conv2D(graph, "conv_5", config={
+        "n_channels": 256,
+        "border_mode": (1, 1),
+        "kernel_shape": (3, 3),
+        "weight_filler": normal(),
+        "bias_filler": constant(0.1),
+        "activation": relu
+    })
+
+    pool_5 = Pool(graph, "pool_5", config={
+        "kernel_size": (2, 2)
+    })
+
+
+    flatten_5 = Flatten(graph, "flatten_5", config={
+        "dims": 2
+    })
+
+    fc6 = Dense(graph, "fc6", config={
+        "n_out": 4096,
+        "activation": relu,
+        "weight_filler": constant(0),
+        "bias_filler": constant(0)
+    })
+
+    #dp6 = Dropout(graph, "dp6")
+
+    fc7 = Dense(graph, "fc7", config={
+        "n_out": 4096,
+        "activation": None,
+        "weight_filler": constant(0),
+        "bias_filler": constant(0)
+    })
+
+    # dp7 = Dropout(graph, "dp7")
+
+    fc8 = Dense(graph, "fc8", config={
+        "n_out": 4800,
+        "activation": relu,
+        "weight_filler": normal(0, 0.01),
+        "bias_filler": constant(0),
+        "is_output": True
+    })
+
+    rs9 = Reshape(graph, "rs9", config={
+        "shape": (-1, 1, 60, 80)
+    })
+
+    loss = EuclideanLoss(graph, "loss")
+
+    # Make connections
+    data.connect(conv_1)
+
+    conv_1.connect(lrn_1)
+    lrn_1.connect(pool_1)
+    pool_1.connect(conv_2)
+    conv_2.connect(lrn_2)
+    lrn_2.connect(pool_2)
+    pool_2.connect(conv_3)
     conv_3.connect(conv_4)
-    conv_4.connect(flatten)
-    flatten.connect(hidden_0)
-    hidden_0.connect(hidden_1)
-    hidden_1.connect(hidden_2)
-    hidden_2.connect(rs)
-    rs.connect(loss)
-    label.connect(loss)
+    conv_4.connect(conv_5)
+    conv_5.connect(pool_5)
+    pool_5.connect(flatten_5)
+    flatten_5.connect(fc6)
 
-    hidden_0.connect(l1)
-    hidden_1.connect(l1)
+    fc6.connect(fc7)
+    fc7.connect(fc8)
+    """
+    fc6.connect(dp6)
+    dp6.connect(fc7)
+    fc7.connect(dp7)
+    dp7.connect(fc8)
+    """
+    fc8.connect(rs9)
+    rs9.connect(loss)
+    label.connect(loss)
 
     return graph
 
@@ -114,7 +224,10 @@ if __name__ == "__main__":
     # train_x = train_x.astype(np.float)
     # train_x *= 0.003921
     # Subtract mean
-    train_mean = np.mean(train_x, axis=0, dtype=np.uint8)
+    train_x = train_x.astype(np.uint8)
+    train_mean = np.mean(train_x, axis=0)
+    train_mean = train_mean.astype(np.uint8)
+
     for i in range(train_x.shape[0]):
         train_x[i] = train_x[i] - train_mean
     # Y
@@ -135,25 +248,25 @@ if __name__ == "__main__":
     # g.load_weights(model_file)
 
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    base_lr = 0.0000001
+    base_lr = 0.00000001
     solver = Solver(lr=base_lr)
     solver.load(g)
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
-    solver.optimize(1000, print_freq=40)
+    solver.optimize(1000, print_freq=1)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    #g.save(model_file)
+    g.save(model_file)
     log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
     base_lr /= 10
     solver.learning_rate = base_lr
     solver.optimize(1000, print_freq=40)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    #g.save(model_file)
+    g.save(model_file)
     log("Starting optimization phase 3/3", LOG_LEVEL_INFO)
     base_lr /= 10
     solver.learning_rate = base_lr
     solver.optimize(1000, print_freq=40)
     log("Saving final model", LOG_LEVEL_INFO)
-    #g.save(model_file)
+    g.save(model_file)
     log("Testing inference", LOG_LEVEL_INFO)
 
 

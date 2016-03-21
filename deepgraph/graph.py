@@ -5,6 +5,7 @@ import os
 import theano
 import theano.tensor as T
 import theano.misc.pkl_utils as pkl_utils
+from theano.compile.nanguardmode import NanGuardMode
 
 from deepgraph.constants import *
 from deepgraph.utils.logging import *
@@ -127,15 +128,18 @@ class Graph(object):
         outputs = []
         for node in self.nodes:
             # Collect cost
-            if node.loss_weight > 0:
-                costs.append((node.loss_weight, node.expression))
+            if node.is_loss > 0:
+                local_loss_weight = node.conf("loss_weight")
+                local_loss_weight = local_loss_weight if local_loss_weight is not None else 1
+                costs.append((local_loss_weight, node.expression))
                 outputs.append(node.expression)
             # Collect parameters
             if node.computes_gradient and len(node.params) > 0:
                 # Add the nodes parameters to the local list
                 params += node.params
                 # Add one entry of learning rate per parameter (needed later for zip)
-                learning_rates += [node.lr if node.lr is not None else 1] * len(node.params)
+                local_lr = node.conf("learning_rate")
+                learning_rates += [local_lr if local_lr is not None else 1] * len(node.params)
         #########################################
         # Compute the global cost function with their respective weights
         #########################################
@@ -172,7 +176,8 @@ class Graph(object):
                     inputs=[self.index, self.lr, self.momentum, self.weight_decay],
                     outputs=outputs,
                     updates=updates,
-                    givens=givens
+                    givens=givens,
+                    mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
                 )
                 self.compiled_with_var = True
                 #########################################
@@ -214,8 +219,9 @@ class Graph(object):
             infer_in = []
             infer_out = []
             for node in self.nodes:
-                if node.phase == PHASE_ALL or node.phase == PHASE_INFER:
-                    if node.is_output:
+
+                if node.conf("phase") == PHASE_ALL or node.conf("phase") == PHASE_INFER:
+                    if node.conf("is_output"):
                         infer_out.append(node.expression)
                     elif node.is_data:
                         infer_in.append(node.expression)
@@ -303,7 +309,7 @@ class Node(object):
     """
     Generic node class. Implements the new config object pattern
     """
-    def __init__(self, graph, name, is_output=False, phase=PHASE_ALL, config={}):
+    def __init__(self, graph, name, config={}):
         """
         Constructor
         :param graph: Graph
@@ -320,14 +326,13 @@ class Node(object):
 
         # Name
         self.name = name
-        self.is_output = is_output
-        # Flag for producing loss
-        self.loss_weight = 0
         # Flag for data. This flag has to be set to True if the node should act as an input
         self.is_data = False
         # Flag grad. In case this flag is set to True,
         # the graph will collect information about the parameters during compilation
         self.computes_gradient = False
+        # Flag for loss nodes
+        self.is_loss = False
         # Init flag
         self.is_init = False
         # Keep track of all nodes feeding this node and those which are fed by this node
@@ -343,10 +348,13 @@ class Node(object):
         self.params = []
         # Output shape
         self.output_shape = None
-        # Phase definition
-        self.phase = phase
         # Config properties
-        self.config = config
+        self.config = config if config is not None else {}
+        # Config defaults
+        self.set_conf_default("is_output", False)
+        self.set_conf_default("phase", PHASE_ALL)
+        self.set_conf_default("loss_weight", 1)
+        self.set_conf_default("learning_rate", 1)
         # Add to graph
         graph.add(self)
 
@@ -358,7 +366,6 @@ class Node(object):
         -------
 
         """
-
         if not self.is_init:
             for i in self.inputs:
                 if not i.is_init:
@@ -427,3 +434,12 @@ class Node(object):
             return self.config[key]
         else:
             return None
+
+    def set_conf_default(self, key, value):
+        if not hasattr(self, "config"):
+            self.config = {}
+        if key in self.config:
+            if self.config[key] is None:
+                self.config[key] = value
+        else:
+            self.config[key] = value
