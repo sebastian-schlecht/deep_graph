@@ -1,4 +1,8 @@
+import math
+
 import numpy as np
+import theano
+import theano.tensor as T
 
 from deepgraph.constants import *
 from deepgraph.utils.logging import *
@@ -40,7 +44,12 @@ class Solver(object):
         self.models = graph.models
         self.index = 0
 
-    def optimize_with_var(self, n_epochs=20, test_freq=100, val_freq=100, print_freq=10):
+    def optimize_with_var(
+            self,
+            n_epochs=20,
+            test_freq=100,
+            val_freq=100,
+            print_freq=10):
         """
         Optimize a graph with pre compiled data
         :param n_epochs: Int
@@ -67,10 +76,18 @@ class Solver(object):
                         val_losses = np.array([self.models[VAL](i) for i in range(self.graph.n_val_batches)])
                         log("Validation score at iteration %i: %s" % (idx, str(np.mean(val_losses, axis=0))), LOG_LEVEL_INFO)
 
-
-    def optimize_without_var(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None, val_input=None, test_input=None, batch_size=64, print_freq=10):
+    def optimize_without_var(
+            self,
+            n_epochs=20,
+            test_freq=100,
+            val_freq=100,
+            train_input=None,
+            val_input=None,
+            test_input=None,
+            batch_size=64,
+            print_freq=10):
         """
-        Not implemented yet. Should optimize a graph by iterating through the array. Please note that this copies the data to the GPU for each call (slow)
+        Optimize a graph by iterating through the array. Please note that this copies the data to the GPU for each call (slow)
         :param n_epochs: Int
         :param test_freq: Int
         :param val_freq: Int
@@ -86,7 +103,6 @@ class Solver(object):
         assert train_input is not None
         train_x, train_y = train_input
         assert len(train_x) == len(train_y)
-        n_train_batches = len(train_x) // batch_size
         idx = 0
         while epoch < n_epochs:
             epoch += 1
@@ -111,7 +127,16 @@ class Solver(object):
                         log("Validation score at iteration %i: %s" % (idx, str(np.mean(val_losses, axis=0))), LOG_LEVEL_INFO)
                 minibatch_index += 1
 
-    def optimize(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None, val_input=None, test_input=None, batch_size=None, print_freq=10):
+    def optimize(
+            self,
+            n_epochs=20,
+            test_freq=100,
+            val_freq=100,
+            train_input=None,
+            val_input=None,
+            test_input=None,
+            batch_size=None,
+            print_freq=10):
         """
         Optimize the parameters of a graph
         :param n_epochs: Int
@@ -132,6 +157,58 @@ class Solver(object):
             self.optimize_without_var(n_epochs=n_epochs, test_freq=test_freq, val_freq=val_freq, train_input=train_input, batch_size=batch_size, print_freq=print_freq)
         else:
             self.optimize_with_var(n_epochs, test_freq, val_freq, print_freq)
+
+    def compile_and_fit(self, graph, epochs=20, train_input=None, batch_size=64, superbatch_size=128, print_freq=20):
+        """
+        Compile the graph and optimize using larger chunks of data
+        :param graph: Graph
+        :param epochs: Int
+        :param train_input: Tuple
+        :param batch_size: Int
+        :param superbatch_size: Int
+        :param print_freq: Int
+        :return:
+        """
+        self.graph = graph
+        self.models = graph.models
+        self.index = 0
+        train_x, train_y = train_input
+        assert len(train_x) == len(train_y)
+        assert len(train_x) > superbatch_size
+        assert batch_size < superbatch_size
+
+        # Generate two variables of fixed size which hold our superbatch
+        var_x = theano.shared(np.asarray(train_x[0: superbatch_size], dtype=theano.config.floatX), borrow=True)
+        var_y = theano.shared(np.asarray(train_y[0: superbatch_size], dtype=theano.config.floatX), borrow=True)
+
+        # Compile the graph
+        graph.compile(train_inputs=[var_x, var_y], batch_size=batch_size)
+
+        # Now we iterate in super-batches
+        idx = 0
+        epoch = 0
+        while epoch < epochs:
+            epoch += 1
+            for super_x, super_y in batch_parallel(train_x, train_y, superbatch_size):
+
+                # Assign the superbatch to the shared variable
+                var_x.set_value(super_x, borrow=True)
+                var_y.set_value(super_y, borrow=True)
+                # Iterate through the super batch
+                n_iters = int(math.ceil(len(super_x) / float(batch_size)))
+                for minibatch_index in range(n_iters):
+                    idx += 1
+                    minibatch_avg_cost = self.models[TRAIN](
+                        minibatch_index,
+                        self.learning_rate,
+                        self.momentum,
+                        self.weight_decay
+                    )
+                    # Print in case the freq is ok
+                    if idx % print_freq == 0:
+                        log("Training score at iteration %i: %s" % (idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
+
+
 
 
 

@@ -19,10 +19,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:40])
+    depths = np.array(depth_field)
 
     images_field = dataset['images']
-    images = np.array(images_field[0:40]).astype(np.uint8)
+    images = np.array(images_field).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
     # Inflate training set (Apply data augmentation)
     log("Augmenting data", LOG_LEVEL_INFO)
-    """
+
     from deepgraph.utils.image import *
 
     train_x_flip_h = np.zeros(train_x.shape, dtype=np.uint8)
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     ##########
     train_x = np.concatenate([train_x, train_x_flip_h, train_x_flip_v, train_x_overexposed, train_x_noise], axis=0)
     train_y = np.concatenate([train_y, train_y_flip_h, train_y_flip_v, train_y_overexposed, train_y_noise], axis=0)
-    """
+
     from deepgraph.utils.common import shuffle_in_unison_inplace
     train_x, train_y = shuffle_in_unison_inplace(train_x, train_y)
 
@@ -259,16 +259,26 @@ if __name__ == "__main__":
     g = build_graph()
     model_file = "data/model.zip"
     # g.load_weights(model_file)
-
-    g.compile(phase=PHASE_TRAIN)
     base_lr = 0.001
     solver = Solver(lr=base_lr)
+    solver.compile_and_fit(
+        graph=g,
+        epochs=10,
+        train_input=(train_x, train_y),
+        batch_size=16,
+        superbatch_size=2*16,
+        print_freq=1
+    )
+    log("Saving final model", LOG_LEVEL_INFO)
+    g.save(model_file)
+    """
+    g.compile(phase=PHASE_TRAIN)
     solver.load(g)
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
     solver.optimize(1000, print_freq=1, train_input=(train_x.astype(np.float32), train_y), batch_size=batch_size)
     log("Saving final model", LOG_LEVEL_INFO)
     g.save(model_file)
-
+    """
 
     """
     log("Testing inference", LOG_LEVEL_INFO)
