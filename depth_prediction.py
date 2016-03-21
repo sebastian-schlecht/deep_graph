@@ -19,10 +19,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:260])
+    depths = np.array(depth_field[0:64])
 
     images_field = dataset['images']
-    images = np.array(images_field[0:260]).astype(np.uint8)
+    images = np.array(images_field[0:64]).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -38,7 +38,7 @@ def load_data(db_file):
 
     for i in range(len(images)):
         ii = imresize(images[i], img_scale)
-        images_sized[i] = np.swapaxes(np.swapaxes(ii,1,2),0,1)
+        images_sized[i] = np.swapaxes(np.swapaxes(ii, 1, 2), 0, 1)
 
     # For this test, we down-sample the depth images to 64x48
 
@@ -76,7 +76,6 @@ def build_graph():
         "stride": (2, 2),
         "ignore_border": True
     })
-
 
     conv_2 = Conv2D(graph, "conv_2", config={
         "n_channels": 256,
@@ -192,6 +191,41 @@ if __name__ == "__main__":
     data = load_data('./data/nyu_depth_v2_labeled.mat')
     train_x, val_x = data[0]
     train_y, val_y = data[1]
+
+    # Inflate training set (Apply data augmentation)
+    log("Augmenting data", LOG_LEVEL_INFO)
+
+    from deepgraph.utils.image import *
+
+    train_x_flip_h = np.zeros(train_x.shape, dtype=np.uint8)
+    train_x_flip_v = np.zeros(train_x.shape, dtype=np.uint8)
+    train_x_overexposed = np.zeros(train_x.shape, dtype=np.uint8)
+    train_x_noise = np.zeros(train_x.shape, dtype=np.uint8)
+
+    train_y_flip_h = np.zeros(train_y.shape, dtype=np.float32)
+    train_y_flip_v = np.zeros(train_y.shape, dtype=np.float32)
+    train_y_overexposed = np.zeros(train_y.shape, dtype=np.float32)
+    train_y_noise = np.zeros(train_y.shape, dtype=np.float32)
+
+    for i in range(train_x.shape[0]):
+        train_x_flip_h[i] = flip_transformer_rgb(train_x[i], "horizontal")
+        train_x_flip_v[i] = flip_transformer_rgb(train_x[i], "vertical")
+        train_x_overexposed[i] = exposure_transformer_rgb(train_x[i])
+        train_x_noise[i] = noise_transformer_rgb(train_x[i])
+
+        train_y_flip_h[i] = flip_transformer_grey(train_y[i], "horizontal")
+        train_y_flip_v[i] = flip_transformer_grey(train_y[i], "vertical")
+        train_y_overexposed[i] = train_y[i].copy()
+        train_y_noise[i] = train_y[i].copy()
+
+    ##########
+    # Concat & shuffle
+    ##########
+    train_x = np.concatenate([train_x, train_x_flip_h, train_x_flip_v, train_x_overexposed, train_x_noise], axis=0)
+    train_y = np.concatenate([train_y, train_y_flip_h, train_y_flip_v, train_y_overexposed, train_y_noise], axis=0)
+
+    from deepgraph.utils.common import shuffle_in_unison_inplace
+    train_x, train_y = shuffle_in_unison_inplace(train_x, train_y)
 
     #######################
     # Data preprocessing

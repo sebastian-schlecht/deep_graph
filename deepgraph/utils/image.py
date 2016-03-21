@@ -31,12 +31,14 @@ def imbatchresize(array, scale):
         imgs_sized[i] = np.swapaxes(np.swapaxes(ii, 1, 2), 0, 1)
 
 
-def noise_transformer(image, intensity= 0.1, mean=0, std=0.01):
+def noise_transformer_rgb(image, intensity=200, mean=0, std=0.01):
     """
-    Add random noise to a given image
-    :param image: np.array
-    :param std: Standard deviation
-    :return: np.array
+    Apply gaussian noise to an RGB image
+    :param image: Numpy array (c x h x w)
+    :param intensity: Int
+    :param mean: Float
+    :param std: Float
+    :return:
     """
     image = image.copy()
     noise = np.random.normal(mean, std, size=image.shape)
@@ -44,18 +46,18 @@ def noise_transformer(image, intensity= 0.1, mean=0, std=0.01):
     return image.astype(np.uint8)
 
 
-
-def flip_transformer_s(image, direction):
+def flip_transformer_grey(image, direction):
     """
     Flip a greyscale image/array
     :param image: Image/Array
     :param direction: Flip dir
     :return: NDArray
     """
-    if direction is 'h':
+    if direction is 'horizontal':
         return image[:, ::-1]
     else:
         return image[::-1, :]
+
 
 def flip_transformer_rgb(image, direction):
     """
@@ -64,25 +66,23 @@ def flip_transformer_rgb(image, direction):
     :param direction: String
     :return: NDArray
     """
-    if direction is 'h':
+    if direction is 'horizontal':
         return image[:, :, ::-1]
     else:
         return image[:, ::-1, :]
 
 
-def exposure_transformer(img, level):
+def exposure_transformer_rgb(img, level=100):
     """
     Change the exposure in an RGB image
     :param img: np.array
     :param level: Number
     :return: Image
     """
-    img = Image.fromarray(img.transpose(1,2,0), mode="RGB")
+    img = Image.fromarray(img.transpose(1, 2, 0), mode="RGB")
 
     def truncate(v):
         return 0 if v < 0 else 255 if v > 255 else v
-    if Image.isStringType(img):  # file path?
-        img = Image.open(img)
     if img.mode not in ['RGB', 'RGBA']:
         raise TypeError('Unsupported source image mode: {}'.format(img.mode))
     img.load()

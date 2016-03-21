@@ -5,7 +5,7 @@ from deepgraph.conf import rng
 __docformat__ = 'restructedtext en'
 
 
-def normal(mu=0, dev=0.01, dtype=theano.config.floatX):
+def normal(mean=0, std=0.01, dtype=theano.config.floatX):
     """
     Return a generating function filling weights with a normal distribution
     :param mu: Float
@@ -14,7 +14,7 @@ def normal(mu=0, dev=0.01, dtype=theano.config.floatX):
     :return:
     """
     def gen(size):
-        return np.asarray(rng.normal(mu, dev, size=size), dtype=dtype)
+        return np.asarray(rng.normal(mean, std, size=size), dtype=dtype)
     return gen
 
 

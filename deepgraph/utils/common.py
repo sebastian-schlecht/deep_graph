@@ -44,3 +44,15 @@ def wrap_shared(array, borrow=True, cast=None):
     else:
         return T.cast(data, cast)
 
+
+def shuffle_in_unison_inplace(a, b):
+    """
+    Shuffle two arrays similarly
+    :param a: Array
+    :param b: Array
+    :return: Tuple
+    """
+    assert len(a) == len(b)
+    p = np.random.permutation(len(a))
+    return a[p], b[p]
+
