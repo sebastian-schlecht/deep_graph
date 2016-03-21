@@ -2,6 +2,7 @@ import numpy as np
 
 from deepgraph.constants import *
 from deepgraph.utils.logging import *
+from deepgraph.utils.common import batch_parallel
 from deepgraph.nn.core import Dropout
 
 __docformat__ = 'restructedtext en'
@@ -67,7 +68,7 @@ class Solver(object):
                         log("Validation score at iteration %i: %s" % (idx, str(np.mean(val_losses, axis=0))), LOG_LEVEL_INFO)
 
 
-    def optimize_without_var(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None, val_input=None, test_input=None, batch_size=32, print_freq=10):
+    def optimize_without_var(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None, val_input=None, test_input=None, batch_size=64, print_freq=10):
         """
         Not implemented yet. Should optimize a graph by iterating through the array. Please note that this copies the data to the GPU for each call (slow)
         :param n_epochs: Int
@@ -80,9 +81,37 @@ class Solver(object):
         :param print_freq: Int
         :return:
         """
-        raise NotImplementedError()
+        epoch = 0
+        log("Optimizing for %i epoch(s) with one batch transfer per cycle" % n_epochs, LOG_LEVEL_INFO)
+        assert train_input is not None
+        train_x, train_y = train_input
+        assert len(train_x) == len(train_y)
+        n_train_batches = len(train_x) // batch_size
+        idx = 0
+        while epoch < n_epochs:
+            epoch += 1
+            minibatch_index = 0
+            for minibatch_x, minibatch_y in batch_parallel(train_x, train_y, batch_size):
+                idx += 1
+                # Train in any case
+                minibatch_avg_cost = self.models[TRAIN](
+                    minibatch_x,
+                    minibatch_y,
+                    self.learning_rate,
+                    self.momentum,
+                    self.weight_decay
+                )
+                # Print in case the freq is ok
+                if idx % print_freq == 0:
+                    log("Training score at iteration %i: %s" % (idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
 
-    def optimize(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None,val_input=None, test_input=None, batch_size=None, print_freq=10):
+                if VAL in self.models:
+                    if idx % val_freq == 0:
+                        val_losses = np.array([self.models[VAL](i) for i in range(self.graph.n_val_batches)])
+                        log("Validation score at iteration %i: %s" % (idx, str(np.mean(val_losses, axis=0))), LOG_LEVEL_INFO)
+                minibatch_index += 1
+
+    def optimize(self, n_epochs=20, test_freq=100, val_freq=100, train_input=None, val_input=None, test_input=None, batch_size=None, print_freq=10):
         """
         Optimize the parameters of a graph
         :param n_epochs: Int
@@ -100,7 +129,7 @@ class Solver(object):
         # Right now we only support two inputs for epoch optimization
         compiled_with_var = self.graph.compiled_with_var
         if not compiled_with_var:
-            self.optimize_without_var(n_epochs, test_freq, val_freq, train_input, batch_size, print_freq)
+            self.optimize_without_var(n_epochs=n_epochs, test_freq=test_freq, val_freq=val_freq, train_input=train_input, batch_size=batch_size, print_freq=print_freq)
         else:
             self.optimize_with_var(n_epochs, test_freq, val_freq, print_freq)
 
