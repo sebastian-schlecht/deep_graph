@@ -66,7 +66,12 @@ class Solver(object):
             for minibatch_index in range(self.graph.n_train_batches):
                 idx = (epoch - 1) * self.graph.n_train_batches + minibatch_index
                 # Train in any case
-                minibatch_avg_cost = self.models[TRAIN](minibatch_index, self.learning_rate, self.momentum, self.weight_decay)
+                minibatch_avg_cost = self.models[TRAIN](
+                    minibatch_index,
+                    self.learning_rate,
+                    self.momentum,
+                    self.weight_decay
+                )
                 # Print in case the freq is ok
                 if idx % print_freq == 0:
                     log("Training score at iteration %i: %s" % (idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
@@ -74,7 +79,11 @@ class Solver(object):
                 if VAL in self.models:
                     if idx % val_freq == 0:
                         val_losses = np.array([self.models[VAL](i) for i in range(self.graph.n_val_batches)])
-                        log("Validation score at iteration %i: %s" % (idx, str(np.mean(val_losses, axis=0))), LOG_LEVEL_INFO)
+                        log("Validation score at iteration %i: %s" % (
+                            idx,
+                            str(np.mean(val_losses, axis=0))),
+                            LOG_LEVEL_INFO
+                        )
 
     def optimize_without_var(
             self,
@@ -149,8 +158,8 @@ class Solver(object):
         :param print_freq: Int
         :return: None
         """
-        # Toggle any dropouts. During optimizatino we want to leverage that
-        Dropout.set_dp_off()
+        # Toggle any dropouts. During optimization we want to leverage that
+        Dropout.set_dp_on()
         # Right now we only support two inputs for epoch optimization
         compiled_with_var = self.graph.compiled_with_var
         if not compiled_with_var:
@@ -172,6 +181,7 @@ class Solver(object):
         self.graph = graph
         self.models = graph.models
         self.index = 0
+        Dropout.set_dp_on()
         train_x, train_y = train_input
         assert len(train_x) == len(train_y)
         assert len(train_x) > superbatch_size
@@ -182,7 +192,7 @@ class Solver(object):
         var_y = theano.shared(np.asarray(train_y[0: superbatch_size], dtype=theano.config.floatX), borrow=True)
 
         # Compile the graph
-        graph.compile(train_inputs=[var_x, var_y], batch_size=batch_size)
+        graph.compile(train_input=[var_x, var_y], batch_size=batch_size)
 
         # Now we iterate in super-batches
         idx = 0
@@ -191,9 +201,9 @@ class Solver(object):
             epoch += 1
             for super_x, super_y in batch_parallel(train_x, train_y, superbatch_size):
 
-                # Assign the superbatch to the shared variable
-                var_x.set_value(super_x, borrow=True)
-                var_y.set_value(super_y, borrow=True)
+                # Assign the super-batch to the shared variable
+                var_x.set_value(super_x, borrow=False)
+                var_y.set_value(super_y, borrow=False)
                 # Iterate through the super batch
                 n_iters = int(math.ceil(len(super_x) / float(batch_size)))
                 for minibatch_index in range(n_iters):

@@ -84,10 +84,10 @@ class Graph(object):
             self.nodes.append(node)
             node.parent = self
 
-    def compile(self, train_inputs=None, test_inputs=None, val_inputs = None, batch_size=None, phase=PHASE_ALL):
+    def compile(self, train_input=None, test_input=None, val_input = None, batch_size=None, phase=PHASE_ALL):
         """
         Compile the graphs expression as a theano function. This method also computes gradients and weight update rules
-        :param train_inputs: Theano Shared Variable (Optional)
+        :param train_input: Theano Shared Variable (Optional)
         :param batch_size: Int (Optional)
         :return: None
         """
@@ -164,11 +164,11 @@ class Graph(object):
         #########################################
         log("Invoking Theano compiler", LOG_LEVEL_INFO)
         if phase is PHASE_ALL or phase is PHASE_TRAIN:
-            if train_inputs is not None:
+            if train_input is not None:
                 if batch_size is None:
                     raise AssertionError("Batch size is needed when compiling the graph with input data.")
-                self.n_train_batches = train_inputs[0].get_value(borrow=True).shape[0] // batch_size
-                replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in train_inputs]
+                self.n_train_batches = train_input[0].get_value(borrow=True).shape[0] // batch_size
+                replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in train_input]
                 # Zip them
                 givens = zip(inputs, replacements)
                 # Compile the function
@@ -177,15 +177,15 @@ class Graph(object):
                     outputs=outputs,
                     updates=updates,
                     givens=givens,
-                    mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
+                    # mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
                 )
                 self.compiled_with_var = True
                 #########################################
                 # In case there are any val and test inputs we compile them here as well
                 #########################################
-                if test_inputs is not None:
-                    self.n_test_batches = test_inputs[0].get_value(borrow=True).shape[0] // batch_size
-                    replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in test_inputs]
+                if test_input is not None:
+                    self.n_test_batches = test_input[0].get_value(borrow=True).shape[0] // batch_size
+                    replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in test_input]
                     givens = zip(inputs, replacements)
                     # Compile the function
                     self.models[TEST] = theano.function(
@@ -194,9 +194,9 @@ class Graph(object):
                         updates=updates,
                         givens=givens
                     )
-                if val_inputs is not None:
-                    self.n_val_batches = val_inputs[0].get_value(borrow=True).shape[0] // batch_size
-                    replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in val_inputs]
+                if val_input is not None:
+                    self.n_val_batches = val_input[0].get_value(borrow=True).shape[0] // batch_size
+                    replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in val_input]
                     givens = zip(inputs, replacements)
                     # Compile the function
                     self.models[VAL] = theano.function(

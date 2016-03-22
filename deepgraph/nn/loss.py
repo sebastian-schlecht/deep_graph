@@ -131,7 +131,7 @@ class LogarithmicScaleInvariantLoss(Node):
             # TODO Eval T.clip() here. It should be less of a problem with last layer relu units though
             # TODO It may return during scale two though
             diff = T.log(T.clip(in_0, eps, MAX)) - T.log(T.clip(in_1, eps, MAX))
-            self.expression = T.mean(diff**2) - ((lambda_factor / (in_0.shape[0]**2)) * (T.sum(diff)**2))
+            self.expression = T.mean(diff**2) - ((lambda_factor / (in_0.shape.prod()**2)) * (T.sum(diff)**2))
 
 
 class EuclideanLoss(Node):

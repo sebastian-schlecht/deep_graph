@@ -1,6 +1,7 @@
 import numpy as np, h5py
 from scipy.misc import imresize
 
+import theano
 from theano.tensor.nnet import relu
 
 
@@ -159,7 +160,7 @@ def build_graph():
         "shape": (-1, 1, 60, 80)
     })
 
-    loss = EuclideanLoss(graph, "loss")
+    loss = LogarithmicScaleInvariantLoss(graph, "loss")
 
     # Make connections
     data_in.connect(conv_1)
@@ -194,7 +195,7 @@ if __name__ == "__main__":
 
     # Inflate training set (Apply data augmentation)
     log("Augmenting data", LOG_LEVEL_INFO)
-
+    """
     from deepgraph.utils.image import *
 
     train_x_flip_h = np.zeros(train_x.shape, dtype=np.uint8)
@@ -226,7 +227,7 @@ if __name__ == "__main__":
 
     from deepgraph.utils.common import shuffle_in_unison_inplace
     train_x, train_y = shuffle_in_unison_inplace(train_x, train_y)
-
+    """
     #######################
     # Data preprocessing
     #######################
@@ -254,7 +255,7 @@ if __name__ == "__main__":
     var_val_x = common.wrap_shared(val_x.astype(np.float32))
     var_val_y = common.wrap_shared(val_y)
 
-    batch_size = 16
+    batch_size = 64
 
     g = build_graph()
     model_file = "data/model.zip"
@@ -264,9 +265,9 @@ if __name__ == "__main__":
     solver.compile_and_fit(
         graph=g,
         epochs=10,
-        train_input=(train_x, train_y),
-        batch_size=16,
-        superbatch_size=2*16,
+        train_input=(train_x.astype(np.float32), train_y),
+        batch_size=batch_size,
+        superbatch_size=10*batch_size,
         print_freq=1
     )
     log("Saving final model", LOG_LEVEL_INFO)

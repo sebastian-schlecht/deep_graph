@@ -4,6 +4,7 @@ import theano.tensor as T
 from theano.tensor.nnet import conv2d
 from theano.tensor.nnet.abstract_conv import get_conv_output_shape
 from theano.tensor.signal.pool import Pool as TPool, pool_2d
+from theano.sandbox.cuda import dnn
 
 from deepgraph.graph import Node
 from deepgraph.nn.init import (normal, constant)
@@ -38,6 +39,7 @@ class Conv2D(Node):
         self.set_conf_default("activation", T.tanh)
         self.set_conf_default("weight_filler", normal())
         self.set_conf_default("bias_filler", constant(1))
+        self.set_conf_default("cudnn", False)
 
         # Those two guys are used for housekeeping
         self.image_shape = None
@@ -90,24 +92,32 @@ class Conv2D(Node):
         if len(self.inputs) > 1:
             raise AssertionError("Conv2D nodes can only have one input.")
 
-        # Use optimization in case the number of samples is constant during compilation
-        if self.image_shape[0] != -1:
-            conv_out = conv2d(
-                input=self.inputs[0].expression,
-                input_shape=self.image_shape,
-                filters=self.W,
-                filter_shape=self.filter_shape,
-                border_mode=self.conf("border_mode"),
-                subsample=self.conf("subsample")
-            )
+        # If there is cudnn, we use that
+        if self.conf("cudnn") is True:
+            conv_out = dnn.dnn_conv(img=self.inputs[0].expression,
+                                    kerns=self.W,
+                                    subsample=self.conf("subsample"),
+                                    border_mode=self.conf("border_mode")
+                                    )
         else:
-            conv_out = conv2d(
-                input=self.inputs[0].expression,
-                filters=self.W,
-                filter_shape=self.filter_shape,
-                border_mode=self.conf("border_mode"),
-                subsample=self.conf("subsample")
-            )
+            # Use optimization in case the number of samples is constant during compilation
+            if self.image_shape[0] != -1:
+                conv_out = conv2d(
+                    input=self.inputs[0].expression,
+                    input_shape=self.image_shape,
+                    filters=self.W,
+                    filter_shape=self.filter_shape,
+                    border_mode=self.conf("border_mode"),
+                    subsample=self.conf("subsample")
+                )
+            else:
+                conv_out = conv2d(
+                    input=self.inputs[0].expression,
+                    filters=self.W,
+                    filter_shape=self.filter_shape,
+                    border_mode=self.conf("border_mode"),
+                    subsample=self.conf("subsample")
+                )
         # Build final expression
         if self.conf("activation") is None:
             # TODO Do we really need one?
@@ -277,6 +287,7 @@ class Pool(Node):
         self.set_conf_default("stride", None)
         self.set_conf_default("padding", (0, 0))
         self.set_conf_default("mode", "max")
+        self.set_conf_default("cudnn", False)
 
     def alloc(self):
         if len(self.inputs) > 1:
@@ -298,14 +309,23 @@ class Pool(Node):
 
     def forward(self):
         _in = self.inputs[0].expression
-        self.expression = pool_2d(
-            input=_in,
-            ds=self.conf("kernel_size"),
-            ignore_border=self.conf("ignore_border"),
-            st=self.conf("stride"),
-            padding=self.conf("padding"),
-            mode=self.conf("mode")
-        )
+        # In case we got cudnn we use that op
+        if self.conf("cudnn") is False:
+            self.expression = pool_2d(
+                input=_in,
+                ds=self.conf("kernel_size"),
+                ignore_border=self.conf("ignore_border"),
+                st=self.conf("stride"),
+                padding=self.conf("padding"),
+                mode=self.conf("mode")
+            )
+        else:
+            self.expression = dnn.dnn_pool(
+                img=_in,
+                ws=self.conf("kernel_size"),
+                stride=self.conf("stride"),
+                pad=self.conf("padding")
+            )
 
 
 class LRN(Node):
