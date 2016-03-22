@@ -128,7 +128,7 @@ class Graph(object):
         outputs = []
         for node in self.nodes:
             # Collect cost
-            if node.is_loss > 0:
+            if node.is_loss is True:
                 local_loss_weight = node.conf("loss_weight")
                 local_loss_weight = local_loss_weight if local_loss_weight is not None else 1
                 costs.append((local_loss_weight, node.expression))

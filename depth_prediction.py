@@ -20,10 +20,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field)
+    depths = np.array(depth_field[0:200])
 
     images_field = dataset['images']
-    images = np.array(images_field).astype(np.uint8)
+    images = np.array(images_field[0:200]).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -153,14 +153,15 @@ def build_graph():
         "activation": relu,
         "weight_filler": normal(),
         "bias_filler": constant(0.1),
-        "is_output": True
+
     })
 
     rs9 = Reshape(graph, "rs9", config={
-        "shape": (-1, 1, 60, 80)
+        "shape": (-1, 1, 60, 80),
+        "is_output": True
     })
 
-    loss = LogarithmicScaleInvariantLoss(graph, "loss")
+    loss = EuclideanLoss(graph, "loss")
 
     # Make connections
     data_in.connect(conv_1)
@@ -267,7 +268,7 @@ if __name__ == "__main__":
         epochs=10,
         train_input=(train_x.astype(np.float32), train_y),
         batch_size=batch_size,
-        superbatch_size=10*batch_size,
+        superbatch_size=2*batch_size,
         print_freq=1
     )
     log("Saving final model", LOG_LEVEL_INFO)
