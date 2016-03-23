@@ -285,6 +285,7 @@ class Error(Node):
         :return:
         """
         super(Error, self).__init__(graph, name, is_output=is_output, phase=phase)
+        self.is_error = True
 
     def alloc(self):
         self.output_shape = (1,)

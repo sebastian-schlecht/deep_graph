@@ -126,6 +126,9 @@ class Graph(object):
         learning_rates = []
         outputs = []
         for node in self.nodes:
+            # Collect error
+            if node.is_error is True:
+                outputs.append(node.expression)
             # Collect cost
             if node.loss_weight > 0:
                 costs.append((node.loss_weight, node.expression))
@@ -321,6 +324,8 @@ class Node(object):
         # Name
         self.name = name
         self.is_output = is_output
+        # Error flag
+        self.is_error = False
         # Flag for producing loss
         self.loss_weight = 0
         # Flag for data. This flag has to be set to True if the node should act as an input
