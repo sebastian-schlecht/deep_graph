@@ -130,7 +130,7 @@ class Graph(object):
             # Collect cost
             if node.is_loss is True:
                 local_loss_weight = node.conf("loss_weight")
-                local_loss_weight = local_loss_weight if local_loss_weight is not None else 1
+                local_loss_weight = local_loss_weight if local_loss_weight is not None else 1.0
                 costs.append((local_loss_weight, node.expression))
                 outputs.append(node.expression)
             # Collect parameters
@@ -139,7 +139,7 @@ class Graph(object):
                 params += node.params
                 # Add one entry of learning rate per parameter (needed later for zip)
                 local_lr = node.conf("learning_rate")
-                learning_rates += [local_lr if local_lr is not None else 1] * len(node.params)
+                learning_rates += [local_lr if local_lr is not None else 1.0] * len(node.params)
         #########################################
         # Compute the global cost function with their respective weights
         #########################################
@@ -353,8 +353,8 @@ class Node(object):
         # Config defaults
         self.set_conf_default("is_output", False)
         self.set_conf_default("phase", PHASE_ALL)
-        self.set_conf_default("loss_weight", 1)
-        self.set_conf_default("learning_rate", 1)
+        self.set_conf_default("loss_weight", 1.0)
+        self.set_conf_default("learning_rate", 1.0)
         # Add to graph
         graph.add(self)
 
