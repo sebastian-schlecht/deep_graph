@@ -275,7 +275,7 @@ class Pool(Node):
     Downsample using the Theano pooling module
     """
     def __init__(self, graph, name, kernel_size=(2, 2), ignore_border= True, stride=None,padding=(0,0), mode='max', is_output=False, phase=PHASE_ALL):
-        super(Pool, self).__init__(self, graph, name, is_output=is_output, phase=phase)
+        super(Pool, self).__init__(graph, name, is_output=is_output, phase=phase)
         self.kernel_size = kernel_size
         self.stride = stride
         self.ignore_border = ignore_border
@@ -288,7 +288,7 @@ class Pool(Node):
         in_shape = self.inputs[0].output_shape
         if len(in_shape) != 4:
             raise AssertionError("Input has to be 4D.")
-        if in_shape[3] == 0 or in_shape[4] == 0:
+        if in_shape[2] == 0 or in_shape[2] == 0:
             raise AssertionError("Input shape is invalid.")
 
         # Invoke theano internal function for shape computation

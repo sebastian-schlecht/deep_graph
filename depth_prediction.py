@@ -18,10 +18,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:11])
+    depths = np.array(depth_field)
 
     images_field = dataset['images']
-    images = np.array(images_field[0:11]).astype(np.uint8)
+    images = np.array(images_field).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -59,25 +59,25 @@ def build_graph():
     data            = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
     label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), phase=PHASE_TRAIN)
 
-    conv_pool_0     = Conv2DPool(
+    conv_0     = Conv2D(
         graph,
         "conv_0",
         n_channels=96,
         kernel_shape=(11, 11),
         subsample=(4, 4),
-        pool_size=(3, 3),
         activation=relu
     )
+    pool_0 = Pool(graph, "pool_0", kernel_size=(3, 3), stride=(2, 2))
     lrn_0           = LRN(graph, "lrn_0")
-    conv_pool_1     = Conv2DPool(
+    conv_1   = Conv2DPool(
         graph,
         "conv_1",
         n_channels=256,
         kernel_shape=(5, 5),
         border_mode=2,
-        pool_size=(3, 3),
         activation=relu
     )
+    pool_1 = Pool(graph, "pool_1", kernel_size=(3, 3), stride=(2, 2))
     lrn_1           = LRN(graph, "lrn_1")
     conv_2          = Conv2D(
         graph,
@@ -95,15 +95,15 @@ def build_graph():
         border_mode=1,
         activation=relu
      )
-    conv_4          = Conv2DPool(
+    conv_4          = Conv2D(
         graph,
         "conv_4",
         n_channels=256,
         kernel_shape=(3, 3),
         border_mode=1,
-        pool_size=(3, 3),
         activation=relu
     )
+    pool_4 = Pool(graph, "pool_4", kernel_size=(3, 3), stride=(2, 2))
     flatten         = Flatten(graph, "flatten", dims=2)
     hidden_0        = FC(graph, "fc_0", n_out=4096, activation=None)
     # dp_0            = Dropout(graph, "dp_0")
@@ -111,18 +111,21 @@ def build_graph():
     hidden_2        = FC(graph, "fc_1", n_out=4800, activation=relu)
     rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
 
-    loss            = EuclideanLoss(graph, "loss")
+    loss            = EuclideanLoss(graph, "loss", loss_weight=1.0)
     l1 = L2RegularizationLoss(graph, "l1", loss_weight=0.001)
 
     # Connect
-    data.connect(conv_pool_0)
-    conv_pool_0.connect(lrn_0)
-    lrn_0.connect(conv_pool_1)
-    conv_pool_1.connect(lrn_1)
+    data.connect(conv_0)
+    conv_0.connect(pool_0)
+    pool_0.connect(lrn_0)
+    lrn_0.connect(conv_1)
+    conv_1.connect(pool_1)
+    pool_1.connect(lrn_1)
     lrn_1.connect(conv_2)
     conv_2.connect(conv_3)
     conv_3.connect(conv_4)
-    conv_4.connect(flatten)
+    conv_4.connect(pool_4)
+    pool_4.connect(flatten)
     flatten.connect(hidden_0)
     hidden_0.connect(hidden_1)
     hidden_1.connect(hidden_2)
@@ -137,8 +140,8 @@ def build_graph():
 
 
 if __name__ == "__main__":
-    # data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
-    data = load_data('./data/nyu_depth_v2_labeled.mat')
+    data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
+    # data = load_data('./data/nyu_depth_v2_labeled.mat')
     train_x, val_x = data[0]
     train_y, val_y = data[1]
 
@@ -152,7 +155,8 @@ if __name__ == "__main__":
     # train_x = train_x.astype(np.float)
     # train_x *= 0.003921
     # Subtract mean
-    train_mean = np.mean(train_x, axis=0, dtype=np.uint8)
+    train_mean = np.mean(train_x, axis=0)
+    train_mean = train_mean.astype(np.uint8)
     for i in range(train_x.shape[0]):
         train_x[i] = train_x[i] - train_mean
     # Y
@@ -166,7 +170,7 @@ if __name__ == "__main__":
     var_val_x = common.wrap_shared(val_x.astype(np.float32))
     var_val_y = common.wrap_shared(val_y)
 
-    batch_size = 5
+    batch_size = 64
 
     g = build_graph()
     model_file = "data/model.zip"
@@ -177,21 +181,22 @@ if __name__ == "__main__":
     solver = Solver(lr=base_lr)
     solver.load(g)
     log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
-    solver.optimize(1000, print_freq=1)
+    solver.optimize(1000, print_freq=40)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    #g.save(model_file)
+    g.save(model_file)
     log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
     base_lr /= 10
     solver.learning_rate = base_lr
     solver.optimize(1000, print_freq=40)
     log("Saving intermediate model state", LOG_LEVEL_INFO)
-    #g.save(model_file)
+    g.save(model_file)
     log("Starting optimization phase 3/3", LOG_LEVEL_INFO)
     base_lr /= 10
     solver.learning_rate = base_lr
     solver.optimize(1000, print_freq=40)
     log("Saving final model", LOG_LEVEL_INFO)
-    #g.save(model_file)
+    g.save(model_file)
+    """
     log("Testing inference", LOG_LEVEL_INFO)
 
 
@@ -199,7 +204,7 @@ if __name__ == "__main__":
     # Deactivate any dropouts
     Dropout.set_dp_off()
     print g.infer([sample.reshape((1, 3, 240, 320)).astype(np.float32)])
-
+    """
 
 
 
