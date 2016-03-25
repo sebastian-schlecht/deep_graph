@@ -161,4 +161,4 @@ class EuclideanLoss(Node):
             in_0 = self.inputs[0].expression
             in_1 = self.inputs[1].expression
 
-            self.expression = 0.5 * T.mean((in_0 - in_1) ** 2)
+            self.expression = T.mean((in_0 - in_1) ** 2)

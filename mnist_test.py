@@ -7,7 +7,7 @@ from deepgraph.utils.datasets import *
 
 from theano.tensor.nnet import relu
 
-data = load_data("data/mnist.pkl.gz")
+data = load_data("./data/mnist.pkl.gz")
 
 train_x, train_y = data[0]
 val_x, val_y = data[1]
