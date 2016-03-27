@@ -11,7 +11,7 @@ from deepgraph.nn.loss import *
 from deepgraph.solver import *
 from deepgraph.utils.logging import *
 
-from deepgraph.pipeline import Optimizer, H5DBLoader, Pipeline
+from deepgraph.pipeline import Optimizer, H5DBLoader, Pipeline, Transformer
 
 
 def build_graph():
@@ -106,12 +106,13 @@ if __name__ == "__main__":
     g = build_graph()
 
     # Build the training pipeline
-    db_loader = H5DBLoader("db",transfer_shape, config={
+    db_loader = H5DBLoader("db", ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)), config={
         "db": './data/nyu_depth_v2_labeled.mat',
         "key_data": "images",
         "key_label": "depths",
         "chunk_size": chunk_size
     })
+    transformer = Transformer("tr", transfer_shape, config={})
     optimizer = Optimizer("opt", g, transfer_shape, config={
         "batch_size":  batch_size,
         "chunk_size": chunk_size,
@@ -122,8 +123,11 @@ if __name__ == "__main__":
 
     })
 
-    p = Pipeline()
+    p = Pipeline(config={
+        "train_iters": 100
+    })
     p.add(db_loader)
+    p.add(transformer)
     p.add(optimizer)
     p.run()
 

@@ -8,7 +8,6 @@ import numpy as np
 import h5py
 from scipy.misc import imresize
 
-
 from deepgraph.utils.logging import log
 from deepgraph.utils.common import batch_parallel
 from deepgraph.constants import *
@@ -20,13 +19,15 @@ class Pipeline(object):
     """
     SIG_FINISHED = 0
     SIG_ABORT = -1
-    def __init__(self):
+
+    def __init__(self, config):
         """
         Constructor
         :return: Pipeline
         """
         self.processors = []
         self.last_item = None
+        self.config = config
 
     def add(self, processor):
         """
@@ -74,6 +75,27 @@ class Pipeline(object):
             log("Abort signal sent. Pipeline stopping.", LOG_LEVEL_WARNING)
 
 
+
+
+
+class Packet(object):
+    """
+    Packet container for generic data flowing through the pipeline
+    """
+    def __init__(self, id, phase, shapes, data):
+        """
+        Constructor
+        :param phase: Int (Phase)
+        :param shapes: Tuple
+        :param data: AnyType
+        :return:
+        """
+        self.id = id
+        self.phase = phase
+        self.shapes = shapes
+        self.data = data
+
+
 class Processor(threading.Thread):
     """
     Generic processor class which implements a stage in the pipeline. Each processor may have at max
@@ -81,8 +103,8 @@ class Processor(threading.Thread):
     That guarantees that data is passing forward only after all stages have been through their init phase.
     Each processor has an entry queue where other parts of the pipeline can put data in
     """
-    SPIN_WAIT_TIME = 0.5
-    QUEUE_FULL_OR_EMPTY_TIMEOUT = 1
+    SPIN_WAIT_TIME = 0.5    # Wait time in case process block has not done any work
+    QUEUE_FULL_OR_EMPTY_TIMEOUT = 1     # Timeout after which stop states are checked
 
     def __init__(self, name, shapes, config, buffer_size=10):
         """
@@ -113,9 +135,9 @@ class Processor(threading.Thread):
         :return:
         """
         self.init()
-        self.ready.set()
         if self.top is not None:
             self.top.ready.wait()
+        self.ready.set()
         while not self.stop.is_set():
             res = self.process()
             if not res:
@@ -172,30 +194,9 @@ class H5DBLoader(Processor):
         if self.top is not None:
             log("H5DBLoader: Preloading chunk", LOG_LEVEL_VERBOSE)
             c_size = self.config["chunk_size"]
+            start = time.time()
             data = self.data_field[self.cursor:self.cursor+c_size]
             label = self.label_field[self.cursor:self.cursor+c_size]
-            # Preprocess
-            data = np.swapaxes(data, 2, 3)
-            label = np.swapaxes(label, 1, 2)
-
-            data_scale = 0.5
-            label_scale = 0.125
-
-            data_sized = np.zeros((data.shape[0], data.shape[1], int(data.shape[2]*data_scale), int(data.shape[3]*data_scale)), dtype=np.uint8)
-            label_sized = np.zeros((label.shape[0], int(label.shape[1]*label_scale), int(label.shape[2]*label_scale)), dtype=np.float32)
-
-            for i in range(len(data)):
-                ii = imresize(data[i], data_scale)
-                data_sized[i] = np.swapaxes(np.swapaxes(ii,1,2),0,1)
-
-            # For this test, we down-sample the depth images to 64x48
-
-            for d in range(len(label)):
-                dd = imresize(label[d], label_scale)
-                label_sized[d] = dd
-
-            data = data_sized
-            label = label_sized
 
             # Try to push into queue as long as thread should not terminate
             while not self.stop.is_set():
@@ -203,8 +204,11 @@ class H5DBLoader(Processor):
                     self.top.q.put((data, label), block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
                     break
                 except Queue.Full:
+                    log("H5DBLoader: Waiting for upstream processor to finish", LOG_LEVEL_VERBOSE)
                     # In case the queue is empty, return false, wait for spin and check if we have to abort
                     pass
+            end = time.time()
+            log("H5DBLoader: Fetching took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
             return True
         else:
             # No top node found, enter spin wait time
@@ -219,7 +223,7 @@ class Optimizer(Processor):
     the next chunk is taken from the entry queue
     """
     def __init__(self, name, graph, shapes, config, buffer_size=10):
-        super(Optimizer, self).__init__(name, shapes,config, buffer_size)
+        super(Optimizer, self).__init__(name, shapes, config, buffer_size)
         assert graph is not None
         self.graph = graph
         # Shared vars
@@ -254,11 +258,12 @@ class Optimizer(Processor):
                 has_data = True
                 break
             except Queue.Empty:
+                log("Optimizer: Waiting for data", LOG_LEVEL_VERBOSE)
                 pass
         # Return if no data is there
         if not has_data:
             return False
-
+        start = time.time()
         assert (train_x.shape == self.shapes[0]) and (train_y.shape == self.shapes[1])
         if self.idx < self.config["iters"]:
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.config["chunk_size"]):
@@ -286,16 +291,75 @@ class Optimizer(Processor):
         # We're done
         else:
             self.pipeline.signal(Pipeline.SIG_FINISHED)
+        end = time.time()
+        log("Optimizer: Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
         # Return true, we don't want to enter spin waits. Just proceed with the next chunk or stop
         return True
 
 
+class Transformer(Processor):
+    """
+    Example augmentation implementation
+    """
+    def __init__(self, name, shapes, config, buffer_size=10):
+        super(Transformer, self).__init__(name, shapes, config, buffer_size)
 
+    def init(self):
+        pass
 
+    def process(self):
+        # Check if fully connected
+        if self.top is None:
+            return False
+        # Query data
+        has_data = False
+        while not self.stop.is_set():
+            try:
+                data, label = self.q.get(block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
+                has_data = True
+                break
+            except Queue.Empty:
+                log("Transformer: Waiting for data", LOG_LEVEL_VERBOSE)
+                pass
+        # Return if no data is there
+        if not has_data:
+            return False
 
+        # Do processing
+        log("Transformer: Processing data", LOG_LEVEL_VERBOSE)
+        start = time.time()
+        data = np.swapaxes(data, 2, 3)
+        label = np.swapaxes(label, 1, 2)
 
+        data_scale = 0.5
+        label_scale = 0.125
 
+        data_sized = np.zeros((data.shape[0], data.shape[1], int(data.shape[2]*data_scale), int(data.shape[3]*data_scale)), dtype=np.uint8)
+        label_sized = np.zeros((label.shape[0], int(label.shape[1]*label_scale), int(label.shape[2]*label_scale)), dtype=np.float32)
 
+        for i in range(len(data)):
+            ii = imresize(data[i], data_scale)
+            data_sized[i] = np.swapaxes(np.swapaxes(ii, 1, 2), 0, 1)
+
+        # For this test, we down-sample the depth images to 64x48
+        for d in range(len(label)):
+            dd = imresize(label[d], label_scale)
+            label_sized[d] = dd
+
+        data = data_sized
+        label = label_sized
+        end = time.time()
+        log("Transformer: Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+        # Try to push into queue as long as thread should not terminate
+        while not self.stop.is_set():
+            try:
+                self.top.q.put((data, label), block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
+                break
+            except Queue.Full:
+                log("Transformer: Waiting for upstream processor to finish", LOG_LEVEL_VERBOSE)
+                # In case the queue is empty, return false, wait for spin and check if we have to abort
+                pass
+        return True
 
 
 
