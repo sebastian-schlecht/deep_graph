@@ -82,6 +82,7 @@ class L2RegularizationLoss(Node):
         :param config: Dict
         :return Node
         """
+        self.set_conf_default("loss_weight", 0.0001)
         super(L2RegularizationLoss, self).__init__(graph, name, config)
         self.is_loss = True
 

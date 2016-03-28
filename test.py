@@ -26,17 +26,18 @@ label = Data(g, "label", T.ivector, shape=(-1,), config={
 conv_1 = Conv2D(g, "conv_1", config={
     "n_channels": 20,
     "kernel_shape": (5, 5),
-    "activation": relu
+    "activation": T.tanh
 })
-lrn_1 = LRN(g, "lrn_1")
 pool_1 = Pool(g, "pool_1")
+lrn_1 = LRN(g, "lrn_1")
+
 conv_2 = Conv2D(g, "conv_2", config={
     "n_channels": 50,
     "kernel_shape": (5, 5),
-    "activation": relu,
+    "activation": T.tanh,
 })
-lrn_2 = LRN(g, "lrn_2")
 pool_2 = Pool(g, "pool_2")
+lrn_2 = LRN(g, "lrn_2")
 flatten = Flatten(g, "flatten", config={
     "dims": 2
 })
@@ -53,8 +54,8 @@ arg = ArgMax(g, "arg", config={
 
 error           = Error(g, "error")
 loss            = NegativeLogLikelyHoodLoss(g, "loss", config={"loss_weight": 1.0})
-l1              = L2RegularizationLoss(g, "l1", config={
-    "loss_weight": 0.001
+l2              = L2RegularizationLoss(g, "l2", config={
+    "loss_weight": 0.0001
 })
 
 
@@ -68,11 +69,11 @@ pool_2.connect(lrn_2)
 lrn_2.connect(flatten)
 flatten.connect(fc3)
 fc3.connect(soft)
-fc3.connect(l1)
+fc3.connect(l2)
 label.connect(loss)
 soft.connect(arg)
 soft.connect(loss)
-soft.connect(l1)
+soft.connect(l2)
 arg.connect(error)
 label.connect(error)
 

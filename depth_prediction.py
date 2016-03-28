@@ -138,58 +138,48 @@ def build_graph():
         "bias_filler": constant(1)
     })
 
-    #dp6 = Dropout(graph, "dp6")
+    dp6 = Dropout(graph, "dp6")
 
     fc7 = Dense(graph, "fc7", config={
-        "n_out": 4096,
-        "activation": None,
-        "weight_filler": normal(0, 0.005),
-        "bias_filler": constant(1)
-    })
-
-    # dp7 = Dropout(graph, "dp7")
-
-    fc8 = Dense(graph, "fc8", config={
         "n_out": 4800,
-        "activation": relu,
+        "activation": None,
         "weight_filler": normal(),
         "bias_filler": constant(0.1),
 
     })
 
-    rs9 = Reshape(graph, "rs9", config={
+    rs8 = Reshape(graph, "rs8", config={
         "shape": (-1, 1, 60, 80),
         "is_output": True
     })
 
-    loss            = EuclideanLoss(graph, "loss")
-    l1 = L2RegularizationLoss(graph, "l1", loss_weight=0.001)
+    loss = EuclideanLoss(graph, "loss")
 
     # Connect
-    data.connect(conv_pool_0)
-    conv_pool_0.connect(lrn_0)
-    lrn_0.connect(conv_pool_1)
-    conv_pool_1.connect(lrn_1)
+    data_in.connect(conv_1)
+    conv_1.connect(pool_1)
+    pool_1.connect(lrn_1)
     lrn_1.connect(conv_2)
-    conv_2.connect(conv_3)
+    conv_2.connect(pool_2)
+    pool_2.connect(lrn_2)
+    lrn_2.connect(conv_3)
     conv_3.connect(conv_4)
-    conv_4.connect(flatten)
-    flatten.connect(hidden_0)
-    hidden_0.connect(hidden_1)
-    hidden_1.connect(hidden_2)
-    hidden_2.connect(rs)
-    rs.connect(loss)
+    conv_4.connect(conv_5)
+    conv_5.connect(pool_5)
+    pool_5.connect(flatten_5)
+    flatten_5.connect(fc6)
+    fc6.connect(dp6)
+    dp6.connect(fc7)
+    fc7.connect(rs8)
+    rs8.connect(loss)
     label.connect(loss)
-
-    hidden_0.connect(l1)
-    hidden_1.connect(l1)
 
     return graph
 
 
 if __name__ == "__main__":
-    data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
-    # data = load_data('./data/nyu_depth_v2_labeled.mat')
+    # data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
+    data = load_data('./data/nyu_depth_v2_labeled.mat')
     train_x, val_x = data[0]
     train_y, val_y = data[1]
 
@@ -197,7 +187,6 @@ if __name__ == "__main__":
     # Data preprocessing
     #######################
     log("Preprocessing data", LOG_LEVEL_INFO)
-
     # X
     # Scale into 0-1 range
     # train_x = train_x.astype(np.float)
@@ -209,9 +198,6 @@ if __name__ == "__main__":
     np.save("train_mean.npy", train_mean)
     for i in range(train_x.shape[0]):
         train_x[i] = train_x[i] - train_mean
-    # Y
-    # Scale down by 100
-    #train_y *= 0.01
 
     # Wrap data into theano shared variables
     var_train_x = common.wrap_shared(train_x.astype(np.float32))
@@ -225,34 +211,18 @@ if __name__ == "__main__":
     g = build_graph()
     model_file = "data/model.zip"
     # g.load_weights(model_file)
-    base_lr = 0.001
+    base_lr = 0.01
     solver = Solver(lr=base_lr)
     solver.compile_and_fit(
         graph=g,
         epochs=10,
-        train_input=(train_x.astype(np.float32), train_y),
+        train_input=(train_x, train_y),
         batch_size=batch_size,
-        superbatch_size=2*batch_size,
-        print_freq=1
+        superbatch_size=4*batch_size,
+        print_freq=20
     )
     log("Saving final model", LOG_LEVEL_INFO)
     g.save(model_file)
-    """
-    g.compile(phase=PHASE_TRAIN)
-    solver.load(g)
-    log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
-    solver.optimize(1000, print_freq=1, train_input=(train_x.astype(np.float32), train_y), batch_size=batch_size)
-    log("Saving final model", LOG_LEVEL_INFO)
-    g.save(model_file)
-    """
-
-    """
-    log("Testing inference", LOG_LEVEL_INFO)
-    sample = train_x[4]
-    # Deactivate any dropouts
-    Dropout.set_dp_off()
-    print g.infer([sample.reshape((1, 3, 240, 320)).astype(np.float32)])
-    """
 
 
 
