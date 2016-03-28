@@ -176,7 +176,7 @@ if __name__ == "__main__":
     model_file = "data/model.zip"
     g.load_weights(model_file)
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    base_lr = 0.001
+    base_lr = 0.01
     solver = Solver(lr=base_lr)
     solver.load(g)
     Dropout.set_dp_on()
