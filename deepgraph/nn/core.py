@@ -253,7 +253,7 @@ class FC(Node):
             self.W = W
         # Bias
         if self.b is None:
-            b_values = constant(0)(self.n_out)
+            b_values = constant(0.1)(self.n_out)
             b = theano.shared(value=b_values, name='b', borrow=True)
             self.b = b
         # Parameters which should be updated during steps

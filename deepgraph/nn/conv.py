@@ -342,21 +342,22 @@ class LRN(Node):
         in_ = self.inputs[0].expression
 
         half = self.n // 2
+
         sq = T.sqr(in_)
 
-        ch, r, c, b = in_.shape
+        b, ch, r, c = in_.shape
 
-        extra_channels = T.alloc(0., ch + 2*half, r, c, b)
+        extra_channels = T.alloc(0., b, ch + 2*half, r, c)
 
-        sq = T.set_subtensor(extra_channels[half:half+ch, :, :, :], sq)
+        sq = T.set_subtensor(extra_channels[:,half:half+ch,:,:], sq)
 
         scale = self.k
 
         for i in xrange(self.n):
-            scale += self.alpha * sq[i:i+ch, :, :, :]
+            scale += self.alpha * sq[:,i:i+ch,:,:]
 
         scale = scale ** self.beta
-
-        self.expression = in_ / scale
+        
+        self.expression= in_ / scale
 
 

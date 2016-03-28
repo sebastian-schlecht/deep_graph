@@ -1,5 +1,6 @@
 import numpy as np, h5py
 from scipy.misc import imresize
+from scipy.ndimage import zoom
 
 from theano.tensor.nnet import relu
 
@@ -10,6 +11,8 @@ from deepgraph.nn.conv import *
 from deepgraph.nn.loss import *
 from deepgraph.solver import *
 from deepgraph.utils.logging import *
+
+batch_size = 64
 
 
 def load_data(db_file):
@@ -42,7 +45,7 @@ def load_data(db_file):
     # For this test, we down-sample the depth images to 64x48
 
     for d in range(len(depths)):
-        dd = imresize(depths[d], depth_scale)
+        dd = zoom(depths[d], depth_scale)
         depths_sized[d] = dd
 
     images = images_sized
@@ -106,13 +109,11 @@ def build_graph():
     pool_4 = Pool(graph, "pool_4", kernel_size=(3, 3), stride=(2, 2))
     flatten         = Flatten(graph, "flatten", dims=2)
     hidden_0        = FC(graph, "fc_0", n_out=4096, activation=None)
-    # dp_0            = Dropout(graph, "dp_0")
-    hidden_1        = FC(graph, "fc_2", n_out=4096, activation=None)
-    hidden_2        = FC(graph, "fc_1", n_out=4800, activation=relu)
+    dp_0            = Dropout(graph, "dp_0")
+    hidden_1        = FC(graph, "fc_1", n_out=4800, activation=None)
     rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
 
     loss            = EuclideanLoss(graph, "loss", loss_weight=1.0)
-    l1 = L2RegularizationLoss(graph, "l1", loss_weight=0.001)
 
     # Connect
     data.connect(conv_0)
@@ -127,14 +128,11 @@ def build_graph():
     conv_4.connect(pool_4)
     pool_4.connect(flatten)
     flatten.connect(hidden_0)
-    hidden_0.connect(hidden_1)
-    hidden_1.connect(hidden_2)
-    hidden_2.connect(rs)
+    hidden_0.connect(dp_0)
+    dp_0.connect(hidden_1)
+    hidden_1.connect(rs)
     rs.connect(loss)
     label.connect(loss)
-
-    hidden_0.connect(l1)
-    hidden_1.connect(l1)
 
     return graph
 
@@ -155,8 +153,10 @@ if __name__ == "__main__":
     # train_x = train_x.astype(np.float)
     # train_x *= 0.003921
     # Subtract mean
+    train_x = train_x.astype(np.float32)
     train_mean = np.mean(train_x, axis=0)
-    train_mean = train_mean.astype(np.uint8)
+    train_mean = train_mean.astype(np.float32)
+    np.save("train_mean.npy", train_mean)
     for i in range(train_x.shape[0]):
         train_x[i] = train_x[i] - train_mean
     # Y
@@ -170,32 +170,23 @@ if __name__ == "__main__":
     var_val_x = common.wrap_shared(val_x.astype(np.float32))
     var_val_y = common.wrap_shared(val_y)
 
-    batch_size = 64
+    
 
     g = build_graph()
     model_file = "data/model.zip"
-    # g.load_weights(model_file)
-
+    g.load_weights(model_file)
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    base_lr = 0.00001
+    base_lr = 0.001
     solver = Solver(lr=base_lr)
     solver.load(g)
-    log("Starting optimization phase 1/3", LOG_LEVEL_INFO)
-    solver.optimize(1000, print_freq=40)
-    log("Saving intermediate model state", LOG_LEVEL_INFO)
-    g.save(model_file)
-    log("Starting optimization phase 2/3", LOG_LEVEL_INFO)
-    base_lr /= 10
-    solver.learning_rate = base_lr
-    solver.optimize(1000, print_freq=40)
-    log("Saving intermediate model state", LOG_LEVEL_INFO)
-    g.save(model_file)
-    log("Starting optimization phase 3/3", LOG_LEVEL_INFO)
-    base_lr /= 10
-    solver.learning_rate = base_lr
-    solver.optimize(1000, print_freq=40)
-    log("Saving final model", LOG_LEVEL_INFO)
-    g.save(model_file)
+    Dropout.set_dp_on()
+    log("Starting optimization phase", LOG_LEVEL_INFO)
+    for i in range(4):
+        solver.optimize(1000, print_freq=40)
+        log("Saving intermediate model state", LOG_LEVEL_INFO)
+        g.save(model_file)
+    
+   
     """
     log("Testing inference", LOG_LEVEL_INFO)
 
