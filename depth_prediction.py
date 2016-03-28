@@ -1,10 +1,8 @@
-import numpy as np, h5py
+import h5py
 from scipy.misc import imresize
 from scipy.ndimage import zoom
 
-import theano
 from theano.tensor.nnet import relu
-
 
 from deepgraph.utils import common
 from deepgraph.graph import *
@@ -210,20 +208,17 @@ if __name__ == "__main__":
 
     g = build_graph()
     model_file = "data/model.zip"
-    # g.load_weights(model_file)
+
+    g.compile(train_input=[var_train_x, var_train_y], batch_size=batch_size)
     base_lr = 0.01
     solver = Solver(lr=base_lr)
-    solver.compile_and_fit(
-        graph=g,
-        epochs=10,
-        train_input=(train_x, train_y),
-        batch_size=batch_size,
-        superbatch_size=4*batch_size,
-        print_freq=20
-    )
-    log("Saving final model", LOG_LEVEL_INFO)
-    g.save(model_file)
-
+    solver.load(g)
+    Dropout.set_dp_on()
+    log("Starting optimization phase", LOG_LEVEL_INFO)
+    for i in range(4):
+        solver.optimize(1000, print_freq=40)
+        log("Saving intermediate model state", LOG_LEVEL_INFO)
+        g.save(model_file)
 
 
 

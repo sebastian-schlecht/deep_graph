@@ -188,8 +188,8 @@ class Solver(object):
         assert batch_size < superbatch_size
 
         # Generate two variables of fixed size which hold our superbatch
-        var_x = theano.shared(np.asarray(train_x[0: superbatch_size], dtype=theano.config.floatX), borrow=True)
-        var_y = theano.shared(np.asarray(train_y[0: superbatch_size], dtype=theano.config.floatX), borrow=True)
+        var_x = theano.shared(np.asarray(train_x[0: superbatch_size], dtype=theano.config.floatX), borrow=False)
+        var_y = theano.shared(np.asarray(train_y[0: superbatch_size], dtype=theano.config.floatX), borrow=False)
 
         # Compile the graph
         graph.compile(train_input=[var_x, var_y], batch_size=batch_size)
