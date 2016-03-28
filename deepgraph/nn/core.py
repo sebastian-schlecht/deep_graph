@@ -87,8 +87,8 @@ class Softmax(Node):
         self.computes_gradient = True
         # Default values
         self.set_conf_default("n_out", 1)
-        self.set_conf_default("weight_filler", constant(0))
-        self.set_conf_default("bias_filler", constant(0))
+        self.set_conf_default("weight_filler", normal())
+        self.set_conf_default("bias_filler", constant(1))
 
     def alloc(self):
         if len(self.inputs) != 1:
@@ -208,7 +208,7 @@ class Dense(Node):
         self.set_conf_default("activation", T.tanh)
         self.set_conf_default("n_out", 1)
         self.set_conf_default("weight_filler", normal())
-        self.set_conf_default("bias_filler", constant(0))
+        self.set_conf_default("bias_filler", constant(0.1))
 
     def alloc(self):
         if len(self.inputs) != 1:
@@ -259,6 +259,7 @@ class Error(Node):
         :return:
         """
         super(Error, self).__init__(graph, name, config)
+        self.is_error = True
 
     def alloc(self):
         self.output_shape = (1,)

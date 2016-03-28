@@ -152,7 +152,7 @@ class Conv2DPool(Node):
         self.set_conf_default("border_mode", "valid")
         self.set_conf_default("activation", T.tanh)
         self.set_conf_default("weight_filler", normal())
-        self.set_conf_default("bias_filler", constant(0))
+        self.set_conf_default("bias_filler", constant(0.1))
 
         # House-keeping
         self.filter_shape = None
@@ -197,16 +197,16 @@ class Conv2DPool(Node):
             border_mode=self.conf("border_mode"),
             subsample=self.conf("subsample")
         )
-        # But we also do pooling, keep that in mind
-        # When propagating data, we keep the n in (n,c,h,w) fixed to -1 to make theano
-        # infer it during runtime
-        # TODO That formula is wrong for alternating pooling modes!!
-        self.output_shape = (
-            in_shape[0],
-            self.output_shape[1],
-            self.output_shape[2] / self.conf("pool_size")[0],
-            self.output_shape[3] / self.conf("pool_size")[1]
+        intermediate = (1, self.output_shape[1], self.output_shape[2], self.output_shape[3])
+        # Include pooling
+        self.output_shape = TPool.out_shape(
+            intermediate,
+            self.pool_size,
+            True,
+            self.pool_stride,
         )
+        self.output_shape = (in_shape[0], self.output_shape[1], self.output_shape[2], self.output_shape[3])
+        pass
 
     def forward(self):
         if len(self.inputs) > 1:
@@ -362,15 +362,22 @@ class LRN(Node):
         in_ = self.inputs[0].expression
 
         half = self.conf("n") // 2
+
         sq = T.sqr(in_)
 
-        ch, r, c, b = in_.shape
-        extra_channels = T.alloc(0., ch + 2*half, r, c, b)
-        sq = T.set_subtensor(extra_channels[half:half+ch, :, :, :], sq)
+        b, ch, r, c = in_.shape
+
+        extra_channels = T.alloc(0., b, ch + 2*half, r, c)
+
+        sq = T.set_subtensor(extra_channels[:,half:half+ch,:,:], sq)
+
         scale = self.conf("k")
+
         for i in xrange(self.conf("n")):
-            scale += self.conf("alpha") * sq[i:i+ch, :, :, :]
+            scale += self.conf("alpha") * sq[:,i:i+ch,:,:]
+
         scale = scale ** self.conf("beta")
-        self.expression = in_ / scale
+
+        self.expression= in_ / scale
 
 

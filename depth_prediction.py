@@ -1,5 +1,6 @@
 import numpy as np, h5py
 from scipy.misc import imresize
+from scipy.ndimage import zoom
 
 import theano
 from theano.tensor.nnet import relu
@@ -20,10 +21,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:200])
+    depths = np.array(depth_field)
 
     images_field = dataset['images']
-    images = np.array(images_field[0:200]).astype(np.uint8)
+    images = np.array(images_field).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -44,7 +45,7 @@ def load_data(db_file):
     # For this test, we down-sample the depth images to 64x48
 
     for d in range(len(depths)):
-        dd = imresize(depths[d], depth_scale)
+        dd = zoom(depths[d], depth_scale)
         depths_sized[d] = dd
 
     images = images_sized
@@ -161,74 +162,37 @@ def build_graph():
         "is_output": True
     })
 
-    loss = EuclideanLoss(graph, "loss")
+    loss            = EuclideanLoss(graph, "loss")
+    l1 = L2RegularizationLoss(graph, "l1", loss_weight=0.001)
 
-    # Make connections
-    data_in.connect(conv_1)
-
-    conv_1.connect(lrn_1)
-    lrn_1.connect(pool_1)
-    pool_1.connect(conv_2)
-    conv_2.connect(lrn_2)
-    lrn_2.connect(pool_2)
-    pool_2.connect(conv_3)
+    # Connect
+    data.connect(conv_pool_0)
+    conv_pool_0.connect(lrn_0)
+    lrn_0.connect(conv_pool_1)
+    conv_pool_1.connect(lrn_1)
+    lrn_1.connect(conv_2)
+    conv_2.connect(conv_3)
     conv_3.connect(conv_4)
-    conv_4.connect(conv_5)
-    conv_5.connect(pool_5)
-    pool_5.connect(flatten_5)
-    flatten_5.connect(fc6)
-
-    fc6.connect(fc7)
-    fc7.connect(fc8)
-    fc8.connect(rs9)
-
-    rs9.connect(loss)
+    conv_4.connect(flatten)
+    flatten.connect(hidden_0)
+    hidden_0.connect(hidden_1)
+    hidden_1.connect(hidden_2)
+    hidden_2.connect(rs)
+    rs.connect(loss)
     label.connect(loss)
+
+    hidden_0.connect(l1)
+    hidden_1.connect(l1)
 
     return graph
 
 
 if __name__ == "__main__":
-    # data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
-    data = load_data('./data/nyu_depth_v2_labeled.mat')
+    data = load_data('/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat')
+    # data = load_data('./data/nyu_depth_v2_labeled.mat')
     train_x, val_x = data[0]
     train_y, val_y = data[1]
 
-    # Inflate training set (Apply data augmentation)
-    log("Augmenting data", LOG_LEVEL_INFO)
-    """
-    from deepgraph.utils.image import *
-
-    train_x_flip_h = np.zeros(train_x.shape, dtype=np.uint8)
-    train_x_flip_v = np.zeros(train_x.shape, dtype=np.uint8)
-    train_x_overexposed = np.zeros(train_x.shape, dtype=np.uint8)
-    train_x_noise = np.zeros(train_x.shape, dtype=np.uint8)
-
-    train_y_flip_h = np.zeros(train_y.shape, dtype=np.float32)
-    train_y_flip_v = np.zeros(train_y.shape, dtype=np.float32)
-    train_y_overexposed = np.zeros(train_y.shape, dtype=np.float32)
-    train_y_noise = np.zeros(train_y.shape, dtype=np.float32)
-
-    for i in range(train_x.shape[0]):
-        train_x_flip_h[i] = flip_transformer_rgb(train_x[i], "horizontal")
-        train_x_flip_v[i] = flip_transformer_rgb(train_x[i], "vertical")
-        train_x_overexposed[i] = exposure_transformer_rgb(train_x[i])
-        train_x_noise[i] = noise_transformer_rgb(train_x[i])
-
-        train_y_flip_h[i] = flip_transformer_grey(train_y[i], "horizontal")
-        train_y_flip_v[i] = flip_transformer_grey(train_y[i], "vertical")
-        train_y_overexposed[i] = train_y[i].copy()
-        train_y_noise[i] = train_y[i].copy()
-
-    ##########
-    # Concat & shuffle
-    ##########
-    train_x = np.concatenate([train_x, train_x_flip_h, train_x_flip_v, train_x_overexposed, train_x_noise], axis=0)
-    train_y = np.concatenate([train_y, train_y_flip_h, train_y_flip_v, train_y_overexposed, train_y_noise], axis=0)
-
-    from deepgraph.utils.common import shuffle_in_unison_inplace
-    train_x, train_y = shuffle_in_unison_inplace(train_x, train_y)
-    """
     #######################
     # Data preprocessing
     #######################
@@ -239,10 +203,10 @@ if __name__ == "__main__":
     # train_x = train_x.astype(np.float)
     # train_x *= 0.003921
     # Subtract mean
-    train_x = train_x.astype(np.uint8)
+    train_x = train_x.astype(np.float32)
     train_mean = np.mean(train_x, axis=0)
-    train_mean = train_mean.astype(np.uint8)
-
+    train_mean = train_mean.astype(np.float32)
+    np.save("train_mean.npy", train_mean)
     for i in range(train_x.shape[0]):
         train_x[i] = train_x[i] - train_mean
     # Y

@@ -52,7 +52,7 @@ arg = ArgMax(g, "arg", config={
 })
 
 error           = Error(g, "error")
-loss            = NegativeLogLikelyHoodLoss(g, "loss")
+loss            = NegativeLogLikelyHoodLoss(g, "loss", config={"loss_weight": 1.0})
 l1              = L2RegularizationLoss(g, "l1", config={
     "loss_weight": 0.001
 })
@@ -60,12 +60,12 @@ l1              = L2RegularizationLoss(g, "l1", config={
 
 
 data.connect(conv_1)
-conv_1.connect(lrn_1)
-lrn_1.connect(pool_1)
-pool_1.connect(conv_2)
-conv_2.connect(lrn_2)
-lrn_2.connect(pool_2)
-pool_2.connect(flatten)
+conv_1.connect(pool_1)
+pool_1.connect(lrn_1)
+lrn_1.connect(conv_2)
+conv_2.connect(pool_2)
+pool_2.connect(lrn_2)
+lrn_2.connect(flatten)
 flatten.connect(fc3)
 fc3.connect(soft)
 fc3.connect(l1)

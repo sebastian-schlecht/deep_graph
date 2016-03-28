@@ -127,6 +127,9 @@ class Graph(object):
         learning_rates = []
         outputs = []
         for node in self.nodes:
+            # Collect error
+            if node.is_error is True:
+                outputs.append(node.expression)
             # Collect cost
             if node.is_loss is True:
                 local_loss_weight = node.conf("loss_weight")
@@ -314,8 +317,6 @@ class Node(object):
         Constructor
         :param graph: Graph
         :param name: String
-        :param is_output: Bool
-        :param phase: Int
         :param config: Dict
         :return: Node
         """
@@ -326,6 +327,9 @@ class Node(object):
 
         # Name
         self.name = name
+
+        # Error flag
+        self.is_error = False
         # Flag for data. This flag has to be set to True if the node should act as an input
         self.is_data = False
         # Flag grad. In case this flag is set to True,
