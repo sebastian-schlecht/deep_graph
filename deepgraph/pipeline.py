@@ -7,6 +7,8 @@ import theano
 import numpy as np
 import h5py
 from scipy.misc import imresize
+from scipy.ndimage import zoom
+
 
 from deepgraph.utils.logging import log
 from deepgraph.utils.common import batch_parallel
@@ -75,23 +77,23 @@ class Pipeline(object):
             log("Abort signal sent. Pipeline stopping.", LOG_LEVEL_WARNING)
 
 
-
-
-
 class Packet(object):
     """
     Packet container for generic data flowing through the pipeline
     """
-    def __init__(self, id, phase, shapes, data):
+    def __init__(self, identifier, phase, num, shapes, data):
         """
         Constructor
-        :param phase: Int (Phase)
-        :param shapes: Tuple
-        :param data: AnyType
+        :param identifier: Packet identifier
+        :param phase: Phase identifier
+        :param num: Number of tensors inside the packet
+        :param shapes: Shapes for each tensor
+        :param data: Data to transport
         :return:
         """
-        self.id = id
+        self.id = identifier
         self.phase = phase
+        self.num = num
         self.shapes = shapes
         self.data = data
 
@@ -165,6 +167,8 @@ class H5DBLoader(Processor):
     Processor class to asynchronously load data in chunks and prepare it for later stages
     TODO Move example specific code out of this class
     """
+    TEMP_FILE = ".tmp.hdf5"
+
     def __init__(self, name, shapes, config, buffer_size=10):
         super(H5DBLoader, self).__init__(name, shapes, config, buffer_size)
         self.db_handle = None
@@ -343,7 +347,7 @@ class Transformer(Processor):
 
         # For this test, we down-sample the depth images to 64x48
         for d in range(len(label)):
-            dd = imresize(label[d], label_scale)
+            dd = zoom(label[d], label_scale)
             label_sized[d] = dd
 
         data = data_sized

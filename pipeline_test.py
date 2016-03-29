@@ -20,25 +20,25 @@ def build_graph():
     data            = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
     label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), phase=PHASE_TRAIN)
 
-    conv_pool_0     = Conv2DPool(
+    conv_0     = Conv2D(
         graph,
         "conv_0",
         n_channels=96,
         kernel_shape=(11, 11),
         subsample=(4, 4),
-        pool_size=(3, 3),
         activation=relu
     )
+    pool_0 = Pool(graph, "pool_0", kernel_size=(3, 3), stride=(2, 2))
     lrn_0           = LRN(graph, "lrn_0")
-    conv_pool_1     = Conv2DPool(
+    conv_1   = Conv2D(
         graph,
         "conv_1",
         n_channels=256,
         kernel_shape=(5, 5),
         border_mode=2,
-        pool_size=(3, 3),
         activation=relu
     )
+    pool_1 = Pool(graph, "pool_1", kernel_size=(3, 3), stride=(2, 2))
     lrn_1           = LRN(graph, "lrn_1")
     conv_2          = Conv2D(
         graph,
@@ -56,43 +56,41 @@ def build_graph():
         border_mode=1,
         activation=relu
      )
-    conv_4          = Conv2DPool(
+    conv_4          = Conv2D(
         graph,
         "conv_4",
         n_channels=256,
         kernel_shape=(3, 3),
         border_mode=1,
-        pool_size=(3, 3),
         activation=relu
     )
+    pool_4 = Pool(graph, "pool_4", kernel_size=(3, 3), stride=(2, 2))
     flatten         = Flatten(graph, "flatten", dims=2)
     hidden_0        = FC(graph, "fc_0", n_out=4096, activation=None)
-    # dp_0            = Dropout(graph, "dp_0")
-    hidden_1        = FC(graph, "fc_2", n_out=4096, activation=None)
-    hidden_2        = FC(graph, "fc_1", n_out=4800, activation=relu)
+    dp_0            = Dropout(graph, "dp_0")
+    hidden_1        = FC(graph, "fc_1", n_out=4800, activation=None)
     rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
 
-    loss            = EuclideanLoss(graph, "loss")
-    l1 = L2RegularizationLoss(graph, "l1", loss_weight=0.001)
+    loss            = EuclideanLoss(graph, "loss", loss_weight=1.0)
 
     # Connect
-    data.connect(conv_pool_0)
-    conv_pool_0.connect(lrn_0)
-    lrn_0.connect(conv_pool_1)
-    conv_pool_1.connect(lrn_1)
+    data.connect(conv_0)
+    conv_0.connect(pool_0)
+    pool_0.connect(lrn_0)
+    lrn_0.connect(conv_1)
+    conv_1.connect(pool_1)
+    pool_1.connect(lrn_1)
     lrn_1.connect(conv_2)
     conv_2.connect(conv_3)
     conv_3.connect(conv_4)
-    conv_4.connect(flatten)
+    conv_4.connect(pool_4)
+    pool_4.connect(flatten)
     flatten.connect(hidden_0)
-    hidden_0.connect(hidden_1)
-    hidden_1.connect(hidden_2)
-    hidden_2.connect(rs)
+    hidden_0.connect(dp_0)
+    dp_0.connect(hidden_1)
+    hidden_1.connect(rs)
     rs.connect(loss)
     label.connect(loss)
-
-    hidden_0.connect(l1)
-    hidden_1.connect(l1)
 
     return graph
 
