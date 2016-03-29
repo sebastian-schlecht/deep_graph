@@ -13,6 +13,7 @@ from scipy.ndimage import zoom
 from deepgraph.utils.logging import log
 from deepgraph.utils.common import batch_parallel
 from deepgraph.constants import *
+from deepgraph.conf import rng
 
 
 class Pipeline(object):
@@ -161,6 +162,39 @@ class Processor(threading.Thread):
         """
         raise NotImplementedError("Abstract method process has to be implemented")
 
+    def pull(self):
+        """
+        Pull data from previous processor
+        :return:
+        """
+        has_data = False
+        rval = None
+        while not self.stop.is_set():
+            try:
+                rval = self.q.get(block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
+                has_data = True
+                break
+            except Queue.Empty:
+                pass
+        # Return if no data is there
+        if not has_data:
+            return None
+        return rval
+
+    def push(self, data):
+        """
+        Push data into next processor
+        :param data:
+        :return:
+        """
+        while not self.stop.is_set():
+            try:
+                self.top.q.put(data, block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
+                break
+            except Queue.Full:
+                # In case the queue is empty, return false, wait for spin and check if we have to abort
+                pass
+
 
 class H5DBLoader(Processor):
     """
@@ -189,6 +223,7 @@ class H5DBLoader(Processor):
         self.data_field = self.db_handle[self.config["key_data"]]
         self.label_field = self.db_handle[self.config["key_label"]]
 
+
     def process(self):
         """
         Read elements from the database in packes specified by "chunk_size". Feed each packet to the top processor
@@ -202,15 +237,7 @@ class H5DBLoader(Processor):
             data = self.data_field[self.cursor:self.cursor+c_size]
             label = self.label_field[self.cursor:self.cursor+c_size]
 
-            # Try to push into queue as long as thread should not terminate
-            while not self.stop.is_set():
-                try:
-                    self.top.q.put((data, label), block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
-                    break
-                except Queue.Full:
-                    log("H5DBLoader: Waiting for upstream processor to finish", LOG_LEVEL_VERBOSE)
-                    # In case the queue is empty, return false, wait for spin and check if we have to abort
-                    pass
+            self.push((data, label))
             end = time.time()
             log("H5DBLoader: Fetching took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
             return True
@@ -254,28 +281,20 @@ class Optimizer(Processor):
         is made in case the chunk_size of this node differs from the producing node.
         :return: Bool (True)
         """
-        # Get an element. This blocks if empty which is what we want
-        has_data = False
-        while not self.stop.is_set():
-            try:
-                train_x, train_y = self.q.get(block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
-                has_data = True
-                break
-            except Queue.Empty:
-                log("Optimizer: Waiting for data", LOG_LEVEL_VERBOSE)
-                pass
+        data = self.pull()
         # Return if no data is there
-        if not has_data:
+        if not data:
             return False
+        train_x, train_y = data
         start = time.time()
         assert (train_x.shape == self.shapes[0]) and (train_y.shape == self.shapes[1])
         if self.idx < self.config["iters"]:
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.config["chunk_size"]):
                 log("Optimizer: Transferring data to computing device", LOG_LEVEL_VERBOSE)
-                # Assign the super-batch to the shared variable
+                # Assign the chunk to the shared variable
                 self.var_x.set_value(chunk_x, borrow=False)
                 self.var_y.set_value(chunk_y, borrow=False)
-                # Iterate through the super batch
+                # Iterate through the chunk
                 n_iters = int(math.ceil(len(chunk_x) / float(self.config["batch_size"])))
                 for minibatch_index in range(n_iters):
                     log("Optimizer: Computing gradients", LOG_LEVEL_VERBOSE)
@@ -303,7 +322,7 @@ class Optimizer(Processor):
 
 class Transformer(Processor):
     """
-    Example augmentation implementation
+    Apply online random augmentation.
     """
     def __init__(self, name, shapes, config, buffer_size=10):
         super(Transformer, self).__init__(name, shapes, config, buffer_size)
@@ -312,57 +331,34 @@ class Transformer(Processor):
         pass
 
     def process(self):
-        # Check if fully connected
-        if self.top is None:
-            return False
-        # Query data
-        has_data = False
-        while not self.stop.is_set():
-            try:
-                data, label = self.q.get(block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
-                has_data = True
-                break
-            except Queue.Empty:
-                log("Transformer: Waiting for data", LOG_LEVEL_VERBOSE)
-                pass
+        data = self.pull()
         # Return if no data is there
-        if not has_data:
+        if not data:
             return False
-
+        # Unpack
+        data, label = data
         # Do processing
         log("Transformer: Processing data", LOG_LEVEL_VERBOSE)
+        i_h = 240
+        i_w = 320
+
+        d_h = 60
+        d_w = 80
         start = time.time()
-        data = np.swapaxes(data, 2, 3)
-        label = np.swapaxes(label, 1, 2)
 
-        data_scale = 0.5
-        label_scale = 0.125
+        cy = rng.randint(data.shape[2] - i_h, size=1)
+        cx = rng.randint(data.shape[3] - i_w, size=1)
+        data = data[:, :, cy:cy+i_h, cx:cx+i_w]
 
-        data_sized = np.zeros((data.shape[0], data.shape[1], int(data.shape[2]*data_scale), int(data.shape[3]*data_scale)), dtype=np.uint8)
-        label_sized = np.zeros((label.shape[0], int(label.shape[1]*label_scale), int(label.shape[2]*label_scale)), dtype=np.float32)
+        # Project image crop corner onto depth scales
+        cy = int(float(cy) * (float(d_h)/float(i_h)))
+        cx = int(float(cx) * (float(d_w)/float(i_w)))
+        label = label[:, cy:cy+d_h, cx:cx+d_w]
 
-        for i in range(len(data)):
-            ii = imresize(data[i], data_scale)
-            data_sized[i] = np.swapaxes(np.swapaxes(ii, 1, 2), 0, 1)
-
-        # For this test, we down-sample the depth images to 64x48
-        for d in range(len(label)):
-            dd = zoom(label[d], label_scale)
-            label_sized[d] = dd
-
-        data = data_sized
-        label = label_sized
         end = time.time()
         log("Transformer: Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
         # Try to push into queue as long as thread should not terminate
-        while not self.stop.is_set():
-            try:
-                self.top.q.put((data, label), block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
-                break
-            except Queue.Full:
-                log("Transformer: Waiting for upstream processor to finish", LOG_LEVEL_VERBOSE)
-                # In case the queue is empty, return false, wait for spin and check if we have to abort
-                pass
+        self.push((data, label))
         return True
 
 

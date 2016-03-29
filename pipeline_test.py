@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     # Build the training pipeline
     db_loader = H5DBLoader("db", ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)), config={
-        "db": './data/nyu_depth_v2_labeled.mat',
+        "db": './data/nyu_v2_sampled.hdf5',
         "key_data": "images",
         "key_label": "depths",
         "chunk_size": chunk_size
