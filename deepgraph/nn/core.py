@@ -137,7 +137,7 @@ class Softmax(Node):
         self.expression = T.nnet.softmax(T.dot(self.inputs[0].expression, self.W) + self.b)
 
 
-class ArgMax(Node):
+class Argmax(Node):
     """
     Computes the argmax of the input. Typically follows a softmax node. Axis specifies the axis to compute the argmax along
     """
@@ -150,7 +150,7 @@ class ArgMax(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(ArgMax, self).__init__(graph, name, is_output=is_output, phase=phase)
+        super(Argmax, self).__init__(graph, name, is_output=is_output, phase=phase)
         self.axis = axis
         self.keepdims = keepdims
 
@@ -269,8 +269,6 @@ class FC(Node):
             lin_output if self.activation is None
             else self.activation(lin_output)
         )
-
-
 
 class Error(Node):
     """

@@ -306,7 +306,7 @@ class Node(object):
     """
     Generic node class. Implements the new config object pattern
     """
-    def __init__(self, graph, name, is_output=False, phase=PHASE_ALL, config={}):
+    def __init__(self, graph, name, is_output=False, phase=PHASE_ALL):
         """
         Constructor
         :param graph: Graph
@@ -350,8 +350,6 @@ class Node(object):
         self.output_shape = None
         # Phase definition
         self.phase = phase
-        # Config properties
-        self.config = config
         # Add to graph
         graph.add(self)
 
@@ -359,11 +357,8 @@ class Node(object):
         """
         Called during graph compilation. Recursively initializes all preceeding nodes if not already done.
         This enables that all nodes have access to previous nodes' output shapes and expressions
-        Returns
-        -------
-
+        :return: None
         """
-
         if not self.is_init:
             for i in self.inputs:
                 if not i.is_init:
@@ -421,14 +416,6 @@ class Node(object):
             raise TypeError("Successor node has to be of a derivative of type 'Node'")
         self.outputs.append(successor)
         successor.inputs.append(self)
+        return successor
 
-    def conf(self, key):
-        """
-        Read a key from the config dictionary
-        :param key: String
-        :return: Any value
-        """
-        if key in self.config:
-            return self.config[key]
-        else:
-            return None
+

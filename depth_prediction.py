@@ -21,10 +21,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field)
+    depths = np.array(depth_field[0:200])
 
     images_field = dataset['images']
-    images = np.array(images_field).astype(np.uint8)
+    images = np.array(images_field[0:200]).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -72,7 +72,7 @@ def build_graph():
     )
     pool_0 = Pool(graph, "pool_0", kernel_size=(3, 3), stride=(2, 2))
     lrn_0           = LRN(graph, "lrn_0")
-    conv_1   = Conv2DPool(
+    conv_1   = Conv2D(
         graph,
         "conv_1",
         n_channels=256,
@@ -156,12 +156,10 @@ if __name__ == "__main__":
     train_x = train_x.astype(np.float32)
     train_mean = np.mean(train_x, axis=0)
     train_mean = train_mean.astype(np.float32)
+    # Store mean file
     np.save("train_mean.npy", train_mean)
     for i in range(train_x.shape[0]):
         train_x[i] = train_x[i] - train_mean
-    # Y
-    # Scale down by 100
-    #train_y *= 0.01
 
     # Wrap data into theano shared variables
     var_train_x = common.wrap_shared(train_x.astype(np.float32))
@@ -170,11 +168,9 @@ if __name__ == "__main__":
     var_val_x = common.wrap_shared(val_x.astype(np.float32))
     var_val_y = common.wrap_shared(val_y)
 
-    
-
     g = build_graph()
-    model_file = "data/model.zip"
-    g.load_weights(model_file)
+    model_file = "data/model_nyu.zip"
+    # g.load_weights(model_file)
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
     base_lr = 0.01
     solver = Solver(lr=base_lr)
@@ -185,19 +181,6 @@ if __name__ == "__main__":
         solver.optimize(1000, print_freq=40)
         log("Saving intermediate model state", LOG_LEVEL_INFO)
         g.save(model_file)
-    
-   
-    """
-    log("Testing inference", LOG_LEVEL_INFO)
-
-
-    sample = train_x[4]
-    # Deactivate any dropouts
-    Dropout.set_dp_off()
-    print g.infer([sample.reshape((1, 3, 240, 320)).astype(np.float32)])
-    """
-
-
 
 
 
