@@ -11,6 +11,6 @@ setup(name='DeepGraph',
       packages=['deepgraph', 'deepgraph.utils', 'deepgraph.nn'],
       install_requires=[
             'h5py',
-            'Theano == 0.8.0rc1',
+            'Theano == 0.8.0',
             ]
      )

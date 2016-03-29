@@ -18,6 +18,21 @@ def batch(iterable, n=1):
         yield iterable[ndx:min(ndx + n, l)]
 
 
+def batch_parallel(iterable_a, iterable_b, n=1):
+    """
+    Split an array into batches (for example for writing them to a DB batch-wise
+    Example:    'for x in batch(array, 3):' for iterating 'array' in batches of 3 elements.
+    :param iterable_a: The first array to be split
+    :param iterable_b: The second array to be split
+    :param n: Batch-size
+    :return: Iterable
+    """
+    assert(len(iterable_a) == len(iterable_b))
+    l = len(iterable_a)
+    for ndx in range(0, l, n):
+        yield iterable_a[ndx:min(ndx + n, l)], iterable_b[ndx:min(ndx + n, l)]
+
+
 def split_array(array, ratio=0.9):
     """
     Split an array according to a given ratio along the first axis. Useful to partition arrays into train/val
