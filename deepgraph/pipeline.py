@@ -223,7 +223,6 @@ class H5DBLoader(Processor):
         self.data_field = self.db_handle[self.config["key_data"]]
         self.label_field = self.db_handle[self.config["key_label"]]
 
-
     def process(self):
         """
         Read elements from the database in packes specified by "chunk_size". Feed each packet to the top processor
@@ -306,8 +305,11 @@ class Optimizer(Processor):
                         self.config["weight_decay"]
                     )
                     # Print in case the freq is ok
-                    if self.idx % 200 == 0:
+                    if self.idx % self.config["print_freq"] == 0:
                         log("Training score at iteration %i: %s" % (self.idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
+                    if self.idx % self.config["save_freq"] == 0:
+                        log("Saving intermediate model state", LOG_LEVEL_INFO)
+                        self.graph.save(self.config["save_prefix"] + "_iter_" + str(self.idx) + ".zip")
                     # Abort if we reached max iters
                     if self.idx >= self.config["iters"]:
                         break

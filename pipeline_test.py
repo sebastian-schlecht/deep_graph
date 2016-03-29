@@ -117,7 +117,10 @@ if __name__ == "__main__":
         "iters": 10,
         "learning_rate": 0.0001,
         "momentum": 0.9,
-        "weight_decay": 0.0005
+        "weight_decay": 0.0005,
+        "print_freq": 200,
+        "save_freq": 1000,
+        "save_prefix": "data/depth_pipeline_alexnet"
 
     })
 

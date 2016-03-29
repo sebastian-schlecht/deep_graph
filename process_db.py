@@ -3,7 +3,7 @@ from scipy.misc import imresize
 from scipy.ndimage import zoom
 
 db_file = "./data/nyu_depth_v2_labeled.mat"
-target_file = "./data/nyu_v2_sampled.hdf5"
+target_file = "./data/nyu_depth_v2_sampled.hdf5"
 
 
 # Read the MAT-File into memory
@@ -28,7 +28,7 @@ depths_sized = np.zeros((depths.shape[0], int(depths.shape[1]*depth_scale), int(
 
 for i in range(len(images)):
     ii = imresize(images[i], img_scale)
-    images_sized[i] = np.swapaxes(np.swapaxes(ii,1,2),0,1)
+    images_sized[i] = np.swapaxes(np.swapaxes(ii, 1, 2), 0, 1)
 
 # For this test, we down-sample the depth images to 64x48
 

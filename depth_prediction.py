@@ -148,10 +148,6 @@ if __name__ == "__main__":
     #######################
     log("Preprocessing data", LOG_LEVEL_INFO)
 
-    # X
-    # Scale into 0-1 range
-    # train_x = train_x.astype(np.float)
-    # train_x *= 0.003921
     # Subtract mean
     train_x = train_x.astype(np.float32)
     train_mean = np.mean(train_x, axis=0)
