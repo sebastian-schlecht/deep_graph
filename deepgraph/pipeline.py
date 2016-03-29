@@ -199,10 +199,7 @@ class Processor(threading.Thread):
 class H5DBLoader(Processor):
     """
     Processor class to asynchronously load data in chunks and prepare it for later stages
-    TODO Move example specific code out of this class
     """
-    TEMP_FILE = ".tmp.hdf5"
-
     def __init__(self, name, shapes, config, buffer_size=10):
         super(H5DBLoader, self).__init__(name, shapes, config, buffer_size)
         self.db_handle = None
@@ -235,6 +232,8 @@ class H5DBLoader(Processor):
             start = time.time()
             data = self.data_field[self.cursor:self.cursor+c_size]
             label = self.label_field[self.cursor:self.cursor+c_size]
+
+            # self.cursor += c_size
 
             self.push((data, label))
             end = time.time()
@@ -271,7 +270,10 @@ class Optimizer(Processor):
         self.var_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=False)
         self.var_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=False)
         # Compile
-        self.graph.compile(train_inputs=[self.var_x, self.var_y], batch_size=32, phase=PHASE_TRAIN)
+        self.graph.compile(train_inputs=[self.var_x, self.var_y], batch_size=self.config["batch_size"], phase=PHASE_TRAIN)
+        # Load weights if necessary
+        if "weights" in self.config:
+            self.graph.load_weights(self.config["weights"])
         self.idx = 0
 
     def process(self):
@@ -286,7 +288,7 @@ class Optimizer(Processor):
             return False
         train_x, train_y = data
         start = time.time()
-        assert (train_x.shape == self.shapes[0]) and (train_y.shape == self.shapes[1])
+        assert (train_x.shape[1:] == self.shapes[0][1:]) and (train_y.shape[1:] == self.shapes[1][1:])
         if self.idx < self.config["iters"]:
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.config["chunk_size"]):
                 log("Optimizer: Transferring data to computing device", LOG_LEVEL_VERBOSE)
@@ -328,9 +330,10 @@ class Transformer(Processor):
     """
     def __init__(self, name, shapes, config, buffer_size=10):
         super(Transformer, self).__init__(name, shapes, config, buffer_size)
+        self.mean = None
 
     def init(self):
-        pass
+        self.mean=np.load("train_mean.npy")
 
     def process(self):
         data = self.pull()
@@ -351,6 +354,9 @@ class Transformer(Processor):
         cy = rng.randint(data.shape[2] - i_h, size=1)
         cx = rng.randint(data.shape[3] - i_w, size=1)
         data = data[:, :, cy:cy+i_h, cx:cx+i_w]
+        # Substract mean
+        for i in range(data.shape[0]):
+            data[i] = data[i] - self.mean
 
         # Project image crop corner onto depth scales
         cy = int(float(cy) * (float(d_h)/float(i_h)))

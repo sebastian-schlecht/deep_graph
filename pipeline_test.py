@@ -97,8 +97,8 @@ def build_graph():
 
 if __name__ == "__main__":
 
-    batch_size = 32
-    chunk_size = 10*32
+    batch_size = 64
+    chunk_size = 10*batch_size
     transfer_shape = ((chunk_size, 3, 240, 320), (chunk_size, 60, 80))
 
     g = build_graph()
@@ -114,18 +114,17 @@ if __name__ == "__main__":
     optimizer = Optimizer("opt", g, transfer_shape, config={
         "batch_size":  batch_size,
         "chunk_size": chunk_size,
-        "iters": 10,
-        "learning_rate": 0.0001,
+        "iters": 20000,
+        "learning_rate": 0.01,
         "momentum": 0.9,
         "weight_decay": 0.0005,
-        "print_freq": 200,
-        "save_freq": 1000,
-        "save_prefix": "data/depth_pipeline_alexnet"
-
+        "print_freq": 1,
+        "save_freq": 10000,
+        "save_prefix": "./data/depth_pipeline_alexnet"
     })
 
     p = Pipeline(config={
-        "train_iters": 100
+
     })
     p.add(db_loader)
     p.add(transformer)
