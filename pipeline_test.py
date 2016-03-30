@@ -1,15 +1,11 @@
-import numpy as np, h5py
-from scipy.misc import imresize
-
 from theano.tensor.nnet import relu
 
-from deepgraph.utils import common
+
 from deepgraph.graph import *
 from deepgraph.nn.core import *
 from deepgraph.nn.conv import *
 from deepgraph.nn.loss import *
 from deepgraph.solver import *
-from deepgraph.utils.logging import *
 
 from deepgraph.pipeline import Optimizer, H5DBLoader, Pipeline, Transformer
 
@@ -98,7 +94,7 @@ def build_graph():
 if __name__ == "__main__":
 
     batch_size = 64
-    chunk_size = 10*batch_size
+    chunk_size = 1*batch_size
     transfer_shape = ((chunk_size, 3, 240, 320), (chunk_size, 60, 80))
 
     g = build_graph()
@@ -115,7 +111,7 @@ if __name__ == "__main__":
         "batch_size":  batch_size,
         "chunk_size": chunk_size,
         "iters": 20000,
-        "learning_rate": 0.01,
+        "learning_rate": 0.001,
         "momentum": 0.9,
         "weight_decay": 0.0005,
         "print_freq": 1,

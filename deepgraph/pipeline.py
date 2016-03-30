@@ -57,6 +57,7 @@ class Pipeline(object):
         """
         for proc in self.processors:
             proc.start()
+        # TODO Feed pipeline with instructions
 
     def stop(self):
         """
@@ -76,6 +77,7 @@ class Pipeline(object):
             self.stop()
         if message == Pipeline.SIG_ABORT:
             log("Abort signal sent. Pipeline stopping.", LOG_LEVEL_WARNING)
+            self.stop()
 
 
 class Packet(object):
@@ -137,14 +139,20 @@ class Processor(threading.Thread):
         Override thread run method. Run is being called automatically when the thread has been started via start()
         :return:
         """
-        self.init()
-        if self.top is not None:
-            self.top.ready.wait()
-        self.ready.set()
-        while not self.stop.is_set():
-            res = self.process()
-            if not res:
-                time.sleep(Processor.SPIN_WAIT_TIME)
+        try:
+            self.init()
+            if self.top is not None:
+                self.top.ready.wait()
+            self.ready.set()
+            while not self.stop.is_set():
+                res = self.process()
+                if not res:
+                    time.sleep(Processor.SPIN_WAIT_TIME)
+        # In case this loop catches any exception we abort the whole process
+        except Exception as e:
+            self.pipeline.signal(Pipeline.SIG_ABORT)
+            raise e
+
 
     def init(self):
         """
@@ -206,6 +214,7 @@ class H5DBLoader(Processor):
         self.cursor = 0
         self.data_field = None
         self.label_field = None
+        self.thresh = 0
 
     def init(self):
         """
@@ -219,6 +228,9 @@ class H5DBLoader(Processor):
         assert "chunk_size" in self.config
         self.data_field = self.db_handle[self.config["key_data"]]
         self.label_field = self.db_handle[self.config["key_label"]]
+        assert self.data_field.shape[0] == self.label_field.shape[0]
+        split = self.config["split_value"] if "split_value" in self.config else 0.9
+        self.thresh = int(split * self.data_field.shape[0])
 
     def process(self):
         """
@@ -230,10 +242,14 @@ class H5DBLoader(Processor):
             log("H5DBLoader: Preloading chunk", LOG_LEVEL_VERBOSE)
             c_size = self.config["chunk_size"]
             start = time.time()
-            data = self.data_field[self.cursor:self.cursor+c_size]
-            label = self.label_field[self.cursor:self.cursor+c_size]
+            upper = min(self.thresh, self.cursor + c_size)
+            data = self.data_field[self.cursor:upper]
+            label = self.label_field[self.cursor:upper]
 
-            # self.cursor += c_size
+            self.cursor += c_size
+            # Reset cursor in case we exceeded the array ranges
+            if self.cursor > self.thresh:
+                self.cursor = 0
 
             self.push((data, label))
             end = time.time()
@@ -269,11 +285,11 @@ class Optimizer(Processor):
         # Theano shared variables
         self.var_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=False)
         self.var_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=False)
-        # Compile
-        self.graph.compile(train_inputs=[self.var_x, self.var_y], batch_size=self.config["batch_size"], phase=PHASE_TRAIN)
         # Load weights if necessary
         if "weights" in self.config:
             self.graph.load_weights(self.config["weights"])
+        # Compile
+        self.graph.compile(train_inputs=[self.var_x, self.var_y], batch_size=self.config["batch_size"], phase=PHASE_TRAIN)
         self.idx = 0
 
     def process(self):
@@ -351,17 +367,35 @@ class Transformer(Processor):
         d_w = 80
         start = time.time()
 
+        # Random crops
         cy = rng.randint(data.shape[2] - i_h, size=1)
         cx = rng.randint(data.shape[3] - i_w, size=1)
         data = data[:, :, cy:cy+i_h, cx:cx+i_w]
-        # Substract mean
-        for i in range(data.shape[0]):
-            data[i] = data[i] - self.mean
+        data = data.astype(np.float32)
 
         # Project image crop corner onto depth scales
         cy = int(float(cy) * (float(d_h)/float(i_h)))
         cx = int(float(cx) * (float(d_w)/float(i_w)))
         label = label[:, cy:cy+d_h, cx:cx+d_w]
+
+        # Do elementwise operations
+        for idx in range(data.shape[0]):
+            # Subtract mean
+            data[idx] = data[idx] - self.mean
+            # Flip with probability 0.5
+            p = rng.randint(2)
+            if p > 0:
+                data[idx] = data[idx, :, :, ::-1]
+                label[idx] = label[idx, :, ::-1]
+
+            # RGB we mult with a random value between 0.8 and 1.2
+            r = rng.randint(80,121) / 100.
+            g = rng.randint(80,121) / 100.
+            b = rng.randint(80,121) / 100.
+            data[idx, 0] = data[idx, 0] * r
+            data[idx, 1] = data[idx, 1] * g
+            data[idx, 2] = data[idx, 2] * b
+
 
         end = time.time()
         log("Transformer: Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)

@@ -285,6 +285,9 @@ class Graph(object):
                 self.data_store = pkl_utils.load(f)
                 self.init_weights = True
                 log("Fine-tuning from file '%s'" % filename, LOG_LEVEL_INFO)
+                if self.is_compiled:
+                    log("Compilation has already taken place. Loaded weights won't "
+                        "have any effect until the graph is recompiled", LOG_LEVEL_WARNING)
         else:
             log("Model not found: '%s" % filename, LOG_LEVEL_WARNING)
 

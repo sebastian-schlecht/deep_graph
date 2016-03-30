@@ -18,6 +18,18 @@ def batch(iterable, n=1):
         yield iterable[ndx:min(ndx + n, l)]
 
 
+def shuffle_in_unison_inplace(a, b):
+    """
+    Shuffle two arrays parallel
+    :param a: Array
+    :param b: Array
+    :return: Tuple
+    """
+    assert len(a) == len(b)
+    p = np.random.permutation(len(a))
+    return a[p], b[p]
+
+
 def batch_parallel(iterable_a, iterable_b, n=1):
     """
     Split an array into batches (for example for writing them to a DB batch-wise
