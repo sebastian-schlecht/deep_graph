@@ -11,6 +11,7 @@ from deepgraph.nn.conv import *
 from deepgraph.nn.loss import *
 from deepgraph.solver import *
 from deepgraph.utils.logging import *
+import math
 
 batch_size = 64
 
@@ -21,10 +22,10 @@ def load_data(db_file):
     dataset = h5py.File(db_file)
 
     depth_field = dataset['depths']
-    depths = np.array(depth_field[0:200])
+    depths = np.array(depth_field)
 
     images_field = dataset['images']
-    images = np.array(images_field[0:200]).astype(np.uint8)
+    images = np.array(images_field).astype(np.uint8)
 
     # Swap axes
     images = np.swapaxes(images, 2, 3)
@@ -168,15 +169,36 @@ if __name__ == "__main__":
     model_file = "data/model_nyu.zip"
     # g.load_weights(model_file)
     g.compile(train_inputs=[var_train_x, var_train_y], batch_size=batch_size)
-    base_lr = 0.01
+    
+    base_lr = 0.001
     solver = Solver(lr=base_lr)
     solver.load(g)
     Dropout.set_dp_on()
     log("Starting optimization phase", LOG_LEVEL_INFO)
     for i in range(4):
-        solver.optimize(1000, print_freq=40)
+        solver.optimize(1000, print_freq=1)
         log("Saving intermediate model state", LOG_LEVEL_INFO)
         g.save(model_file)
+    """
+    idx = 0
+    while True:
+        Dropout.set_dp_on()
+        for cx,cy in common.batch_parallel(train_x,train_y, 10*64):
+            var_train_x.set_value(cx)
+            var_train_y.set_value(cy)
+            n_iters = len(cx) // batch_size
+            for i in range(n_iters):
+                idx += 1
+                Dropout.set_dp_on()
+                minibatch_avg_cost = g.models[TRAIN](
+                            i,
+                            0.001,
+                            0.9,
+                            0.0005
+                        )
+                # Print in case the freq is ok
+                if idx % 1 == 0:
+                    log("Training score at iteration %i: %s" % (idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
+    """
 
-
-
+      

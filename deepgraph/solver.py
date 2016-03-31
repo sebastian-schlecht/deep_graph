@@ -96,7 +96,7 @@ class Solver(object):
         :return: None
         """
         # Toggle any dropouts. During optimizatino we want to leverage that
-        Dropout.set_dp_off()
+        #Dropout.set_dp_off()
         # Right now we only support two inputs for epoch optimization
         compiled_with_var = self.graph.compiled_with_var
         if not compiled_with_var:

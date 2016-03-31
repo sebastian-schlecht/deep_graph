@@ -94,14 +94,14 @@ def build_graph():
 if __name__ == "__main__":
 
     batch_size = 64
-    chunk_size = 1*batch_size
+    chunk_size = 10*batch_size
     transfer_shape = ((chunk_size, 3, 240, 320), (chunk_size, 60, 80))
 
     g = build_graph()
 
     # Build the training pipeline
     db_loader = H5DBLoader("db", ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)), config={
-        "db": './data/nyu_v2_sampled.hdf5',
+        "db": '/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_sampled.hdf5',
         "key_data": "images",
         "key_label": "depths",
         "chunk_size": chunk_size
@@ -110,13 +110,14 @@ if __name__ == "__main__":
     optimizer = Optimizer("opt", g, transfer_shape, config={
         "batch_size":  batch_size,
         "chunk_size": chunk_size,
-        "iters": 20000,
+        "iters": 120000,
         "learning_rate": 0.001,
         "momentum": 0.9,
         "weight_decay": 0.0005,
-        "print_freq": 1,
-        "save_freq": 10000,
-        "save_prefix": "./data/depth_pipeline_alexnet"
+        "print_freq": 50,
+        "save_freq": 60000,
+        "weights": "data/depth_pipeline_alexnet_test_noaug_iter_60000.zip",
+        "save_prefix": "./data/depth_pipeline_alexnet_test_noaug"
     })
 
     p = Pipeline(config={

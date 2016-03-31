@@ -14,6 +14,7 @@ from deepgraph.utils.logging import log
 from deepgraph.utils.common import batch_parallel
 from deepgraph.constants import *
 from deepgraph.conf import rng
+from deepgraph.nn.core import Dropout
 
 
 class Pipeline(object):
@@ -139,19 +140,16 @@ class Processor(threading.Thread):
         Override thread run method. Run is being called automatically when the thread has been started via start()
         :return:
         """
-        try:
-            self.init()
-            if self.top is not None:
-                self.top.ready.wait()
-            self.ready.set()
-            while not self.stop.is_set():
-                res = self.process()
-                if not res:
-                    time.sleep(Processor.SPIN_WAIT_TIME)
-        # In case this loop catches any exception we abort the whole process
-        except Exception as e:
-            self.pipeline.signal(Pipeline.SIG_ABORT)
-            raise e
+        
+        self.init()
+        if self.top is not None:
+            self.top.ready.wait()
+        self.ready.set()
+        while not self.stop.is_set():
+            res = self.process()
+            if not res:
+                time.sleep(Processor.SPIN_WAIT_TIME)
+        
 
 
     def init(self):
@@ -283,8 +281,8 @@ class Optimizer(Processor):
         :return: None
         """
         # Theano shared variables
-        self.var_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=False)
-        self.var_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=False)
+        self.var_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=True)
+        self.var_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=True)
         # Load weights if necessary
         if "weights" in self.config:
             self.graph.load_weights(self.config["weights"])
@@ -309,12 +307,13 @@ class Optimizer(Processor):
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.config["chunk_size"]):
                 log("Optimizer: Transferring data to computing device", LOG_LEVEL_VERBOSE)
                 # Assign the chunk to the shared variable
-                self.var_x.set_value(chunk_x, borrow=False)
-                self.var_y.set_value(chunk_y, borrow=False)
+                self.var_x.set_value(chunk_x, borrow=True)
+                self.var_y.set_value(chunk_y, borrow=True)
                 # Iterate through the chunk
-                n_iters = int(math.ceil(len(chunk_x) / float(self.config["batch_size"])))
+                n_iters = len(chunk_x) // self.config["batch_size"]
                 for minibatch_index in range(n_iters):
                     log("Optimizer: Computing gradients", LOG_LEVEL_VERBOSE)
+                    Dropout.set_dp_on()
                     self.idx += 1
                     minibatch_avg_cost = self.graph.models[TRAIN](
                         minibatch_index,
@@ -349,7 +348,7 @@ class Transformer(Processor):
         self.mean = None
 
     def init(self):
-        self.mean=np.load("train_mean.npy")
+        self.mean=np.load("mean_sampled.npy")
 
     def process(self):
         data = self.pull()
@@ -366,12 +365,15 @@ class Transformer(Processor):
         d_h = 60
         d_w = 80
         start = time.time()
-
-        # Random crops
-        cy = rng.randint(data.shape[2] - i_h, size=1)
-        cx = rng.randint(data.shape[3] - i_w, size=1)
-        data = data[:, :, cy:cy+i_h, cx:cx+i_w]
+        # Mean
         data = data.astype(np.float32)
+        for idx in range(data.shape[0]):
+            # Subtract mean
+            data[idx] = data[idx] - self.mean.astype(np.float32)
+        # Random crops
+        cy = 0#rng.randint(data.shape[2] - i_h, size=1)
+        cx = 0#rng.randint(data.shape[3] - i_w, size=1)
+        data = data[:, :, cy:cy+i_h, cx:cx+i_w]
 
         # Project image crop corner onto depth scales
         cy = int(float(cy) * (float(d_h)/float(i_h)))
@@ -380,14 +382,11 @@ class Transformer(Processor):
 
         # Do elementwise operations
         for idx in range(data.shape[0]):
-            # Subtract mean
-            data[idx] = data[idx] - self.mean
             # Flip with probability 0.5
             p = rng.randint(2)
             if p > 0:
                 data[idx] = data[idx, :, :, ::-1]
                 label[idx] = label[idx, :, ::-1]
-
             # RGB we mult with a random value between 0.8 and 1.2
             r = rng.randint(80,121) / 100.
             g = rng.randint(80,121) / 100.
@@ -395,7 +394,7 @@ class Transformer(Processor):
             data[idx, 0] = data[idx, 0] * r
             data[idx, 1] = data[idx, 1] * g
             data[idx, 2] = data[idx, 2] * b
-
+            
 
         end = time.time()
         log("Transformer: Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
