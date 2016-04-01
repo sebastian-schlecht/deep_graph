@@ -100,6 +100,7 @@ class ConfigMixin(object):
         if key in self.__config__:
             return self.__config__[key]
         else:
+            log("Accessing non standard configuration property", LOG_LEVEL_WARNING)
             return None
 
     def conf_default(self, key, value):
@@ -110,8 +111,7 @@ class ConfigMixin(object):
         :return:
         """
         self.__default_values___.append(key)
-        if key not in self.__config__:
-            self.__config__[key] = value
+        self.__config__[key] = value
 
     def setup_defaults(self):
         """

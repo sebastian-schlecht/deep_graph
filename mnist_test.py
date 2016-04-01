@@ -21,22 +21,44 @@ g = Graph("test")
 # can calculate necessary mem.
 
 data = Data(g, "data", T.matrix, shape=(-1, 1, 28, 28))
-label = Data(g, "label", T.ivector, shape=(-1,), phase=PHASE_TRAIN)
-conv_0 = data.connect(Conv2D(g, "conv_1", n_channels=20, kernel_shape=(5, 5), activation=relu))
-pool_0 = conv_0.connect(Pool(g, "pool_0", kernel_size=(2,2)))
+label = Data(g, "label", T.ivector, shape=(-1,), config={
+    "phase": PHASE_TRAIN
+})
+conv_0 = data.connect(Conv2D(g, "conv_1", config={
+    "channels": 20,
+    "kernel": (5, 5),
+    "activation": relu
+}))
+pool_0 = conv_0.connect(Pool(g, "pool_0", config={
+    "kernel": (2, 2)
+}))
 lrn_0 = pool_0.connect(LRN(g, "lrn_0"))
-conv_1 = lrn_0.connect(Conv2D(g, "conv_2", n_channels=50, kernel_shape=(5, 5), activation=relu))
-pool_1 = conv_1.connect(Pool(g, "pool_1", kernel_size=(2,2)))
+conv_1 = lrn_0.connect(Conv2D(g, "conv_2", config={
+    "channels": 50,
+    "kernel": (5,5 ),
+    "activation": relu
+}))
+pool_1 = conv_1.connect(Pool(g, "pool_1", config={
+    "kernel": (2, 2)
+}))
 lrn_1 = pool_1.connect(LRN(g, "lrn_1"))
-flatten = lrn_1.connect(Flatten(g, "flatten", dims=2))
-hidden_0 = flatten.connect(FC(g, "tanh_0", n_out=500))
-soft = hidden_0.connect(Softmax(g, "softmax", n_out=10))
-argm = soft.connect(Argmax(g, "argmax", is_output=True))
+flatten = lrn_1.connect(Flatten(g, "flatten", config={
+    "dims": 2
+}))
+hidden_0 = flatten.connect(Dense(g, "tanh_0", config={
+    "out": 500
+}))
+soft = hidden_0.connect(Softmax(g, "softmax", config={
+    "out": 10
+}))
+argm = soft.connect(Argmax(g, "argmax", config={
+    "is_output": True
+}))
 
 # Error and loss terms
 error = Error(g, "error")
-loss = NegativeLogLikelyHoodLoss(g, "loss", loss_weight=1.0)
-l1 = L2RegularizationLoss(g, "l1", loss_weight=0.0001)
+loss = NegativeLogLikelyHoodLoss(g, "loss")
+l1 = L2RegularizationLoss(g, "l1")
 
 # Connect losses / errors
 soft.connect(loss)

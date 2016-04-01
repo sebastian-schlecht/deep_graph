@@ -131,15 +131,16 @@ class Graph(object):
             if node.is_error is True:
                 outputs.append(node.expression)
             # Collect cost
-            if node.loss_weight > 0:
-                costs.append((node.loss_weight, node.expression))
+            if node.is_loss:
+                costs.append((node.conf("loss_weight"), node.expression))
                 outputs.append(node.expression)
             # Collect parameters
             if node.computes_gradient and len(node.params) > 0:
                 # Add the nodes parameters to the local list
                 params += node.params
+                lr = node.conf("learning_rate")
                 # Add one entry of learning rate per parameter (needed later for zip)
-                learning_rates += [node.lr if node.lr is not None else 1] * len(node.params)
+                learning_rates += [lr if lr is not None else 1.0] * len(node.params)
         #########################################
         # Compute the global cost function with their respective weights
         #########################################
@@ -218,8 +219,8 @@ class Graph(object):
             infer_in = []
             infer_out = []
             for node in self.nodes:
-                if node.phase == PHASE_ALL or node.phase == PHASE_INFER:
-                    if node.is_output:
+                if node.conf("phase") == PHASE_ALL or node.conf("phase") == PHASE_INFER:
+                    if node.conf("is_output"):
                         infer_out.append(node.expression)
                     elif node.is_data:
                         infer_in.append(node.expression)
@@ -310,7 +311,7 @@ class Node(ConfigMixin):
     """
     Generic node class. Implements the new config object pattern
     """
-    def __init__(self, graph, name, is_output=False, phase=PHASE_ALL):
+    def __init__(self, graph, name, config={}):
         """
         Constructor
         :param graph: Graph
@@ -321,19 +322,18 @@ class Node(ConfigMixin):
         """
         # Call to super
         super(Node, self).__init__()
-        self.make_configurable()
+        self.make_configurable(config)
         if graph is None:
             raise ValueError("Nodes need a parent graph to be assigned to.")
         if name is None:
             raise ValueError("Nodes need a unique name.")
-
         # Name
         self.name = name
-        self.is_output = is_output
-        # Error flag
+        """
+        Flags. These flags are considered to be node specific and cannot be changed by configuration
+        """
+        # Error flag. Similar to output but considered only during train.
         self.is_error = False
-        # Flag for producing loss
-        self.loss_weight = 0
         # Flag for data. This flag has to be set to True if the node should act as an input
         self.is_data = False
         # Flag grad. In case this flag is set to True,
@@ -341,11 +341,19 @@ class Node(ConfigMixin):
         self.computes_gradient = False
         # Init flag
         self.is_init = False
+        # Loss flag
+        self.is_loss = False
+        """
+        Graph housekeeping
+        """
         # Keep track of all nodes feeding this node and those which are fed by this node
         self.inputs = []
         self.outputs = []
         # Graph parent instance
         self.parent = None
+        """
+        Computational attributes
+        """
         # Forward function as a theano expression
         self.expression = None
         # Potential weights
@@ -354,9 +362,7 @@ class Node(ConfigMixin):
         self.params = []
         # Output shape
         self.output_shape = None
-        # Phase definition
-        self.phase = phase
-        # Add to graph
+        # Add to a parent graph
         graph.add(self)
 
     def init(self):
@@ -428,5 +434,6 @@ class Node(ConfigMixin):
         self.conf_default("learning_rate", 1.0)
         self.conf_default("phase", PHASE_ALL)
         self.conf_default("loss_weight", 0)
+        self.conf_default("is_output", False)
 
 

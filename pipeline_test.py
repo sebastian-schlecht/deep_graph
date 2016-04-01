@@ -13,60 +13,89 @@ def build_graph():
     graph = Graph("depth_predictor")
 
     data            = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
-    label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), phase=PHASE_TRAIN)
+    label           = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), config={
+        "phase": PHASE_TRAIN
+    })
 
-    conv_0     = Conv2D(
-        graph,
-        "conv_0",
-        n_channels=96,
-        kernel_shape=(11, 11),
-        subsample=(4, 4),
-        activation=relu
+    conv_0     = Conv2D(graph, "conv_0", config={
+            "channels": 96,
+            "kernel": (11, 11),
+            "subsample": (4, 4),
+            "activation": relu
+        }
     )
-    pool_0 = Pool(graph, "pool_0", kernel_size=(3, 3), stride=(2, 2))
+    pool_0 = Pool(graph, "pool_0", config={
+        "kernel": (3, 3),
+        "stride": (2, 2)
+    })
     lrn_0           = LRN(graph, "lrn_0")
     conv_1   = Conv2D(
         graph,
         "conv_1",
-        n_channels=256,
-        kernel_shape=(5, 5),
-        border_mode=2,
-        activation=relu
+        config={
+            "channels": 256,
+            "kernel": (5, 5),
+            "border_mode": 2,
+            "activation": relu
+        }
     )
-    pool_1 = Pool(graph, "pool_1", kernel_size=(3, 3), stride=(2, 2))
+    pool_1 = Pool(graph, "pool_1", config={
+        "kernel": (3, 3),
+        "stride": (2, 2)
+    })
     lrn_1           = LRN(graph, "lrn_1")
     conv_2          = Conv2D(
         graph,
         "conv_2",
-        n_channels=384,
-        kernel_shape=(3, 3),
-        border_mode=1,
-        activation=relu
+        config={
+            "channels": 384,
+            "kernel": (3, 3),
+            "border_mode": 1,
+            "activation": relu
+        }
     )
     conv_3          = Conv2D(
         graph,
         "conv_3",
-        n_channels=384,
-        kernel_shape=(3, 3),
-        border_mode=1,
-        activation=relu
+        config={
+            "channels": 384,
+            "kernel": (3, 3),
+            "border_mode": 1,
+            "activation": relu
+        }
      )
     conv_4          = Conv2D(
         graph,
         "conv_4",
-        n_channels=256,
-        kernel_shape=(3, 3),
-        border_mode=1,
-        activation=relu
+        config={
+            "channels": 256,
+            "kernel": (3, 3),
+            "border_mode": 1,
+            "activation": relu
+        }
     )
-    pool_4 = Pool(graph, "pool_4", kernel_size=(3, 3), stride=(2, 2))
-    flatten         = Flatten(graph, "flatten", dims=2)
-    hidden_0        = FC(graph, "fc_0", n_out=4096, activation=None)
+    pool_4 = Pool(graph, "pool_4", config={
+        "kernel": (3, 3),
+        "stride": (2, 2)
+    })
+    flatten         = Flatten(graph, "flatten", config={
+        "dims": 2
+    })
+    hidden_0        = Dense(graph, "fc_0", config={
+        "out": 4096,
+        "activation": None
+    })
     dp_0            = Dropout(graph, "dp_0")
-    hidden_1        = FC(graph, "fc_1", n_out=4800, activation=None)
-    rs              = Reshape(graph, "reshape_0", shape=(-1, 1, 60, 80), is_output=True)
+    hidden_1        = Dense(graph, "fc_1", config={
+        "out": 4800,
+        "activation": None
+    })
+    rs              = Reshape(graph, "reshape_0", config={
+        "shape": (-1, 1, 60, 80),
+        "is_output": True
+    })
 
-    loss            = EuclideanLoss(graph, "loss", loss_weight=1.0)
+    loss            = EuclideanLoss(graph, "loss")
 
     # Connect
     data.connect(conv_0)
