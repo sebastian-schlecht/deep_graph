@@ -1,6 +1,5 @@
 from theano.tensor.nnet import relu
 
-
 from deepgraph.graph import *
 from deepgraph.nn.core import *
 from deepgraph.nn.conv import *
@@ -101,7 +100,8 @@ if __name__ == "__main__":
 
     # Build the training pipeline
     db_loader = H5DBLoader("db", ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)), config={
-        "db": '/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_sampled.hdf5',
+        # "db": '/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_sampled.hdf5',
+        "db": 'data/nyu_depth_v2_sampled.hdf5',
         "key_data": "images",
         "key_label": "depths",
         "chunk_size": chunk_size
@@ -110,18 +110,17 @@ if __name__ == "__main__":
     optimizer = Optimizer("opt", g, transfer_shape, config={
         "batch_size":  batch_size,
         "chunk_size": chunk_size,
-        "iters": 120000,
-        "learning_rate": 0.001,
+        "learning_rate": 0.01,
         "momentum": 0.9,
         "weight_decay": 0.0005,
-        "print_freq": 50,
-        "save_freq": 60000,
+        "print_freq": 1,
+        "save_freq": 30000,
         "weights": "data/depth_pipeline_alexnet_test_noaug_iter_60000.zip",
         "save_prefix": "./data/depth_pipeline_alexnet_test_noaug"
     })
 
     p = Pipeline(config={
-
+        "cycles": 20000
     })
     p.add(db_loader)
     p.add(transformer)

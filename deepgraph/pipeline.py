@@ -1,23 +1,19 @@
 import threading
 import Queue
 import time
-import math
 
 import theano
 import numpy as np
 import h5py
-from scipy.misc import imresize
-from scipy.ndimage import zoom
-
 
 from deepgraph.utils.logging import log
-from deepgraph.utils.common import batch_parallel
+from deepgraph.utils.common import batch_parallel, ConfigMixin
 from deepgraph.constants import *
 from deepgraph.conf import rng
 from deepgraph.nn.core import Dropout
 
 
-class Pipeline(object):
+class Pipeline(ConfigMixin):
     """
     Pipeline class to assemble processor units
     """
@@ -29,9 +25,11 @@ class Pipeline(object):
         Constructor
         :return: Pipeline
         """
+        super(Pipeline, self).__init__()
+        self.make_configurable(config)
         self.processors = []
         self.last_item = None
-        self.config = config
+        self.stop_evt = threading.Event()
 
     def add(self, processor):
         """
@@ -58,13 +56,36 @@ class Pipeline(object):
         """
         for proc in self.processors:
             proc.start()
-        # TODO Feed pipeline with instructions
+        # Keep track of the number of cycles executed
+        idx = 0
+        # We assume the first processor in our list is the inlet
+        if len(self.processors) == 0:
+            raise AssertionError("At least one processor needed to make a pipeline run.")
+        proc = self.processors[0]
+        if proc is None:
+            raise AssertionError("At least one processor needed to make a pipeline run.")
+        log("Pipeline: Starting computation", LOG_LEVEL_INFO)
+        while not self.stop_evt.is_set():
+            try:
+                proc.q.put(Packet(identifier=idx, phase=PHASE_TRAIN, num=2, data=None), block=True)
+                idx += 1
+                if (idx % self.conf("validation_frequency")) == 0:
+                    proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True)
+                    idx += 1
+                if idx >= self.conf("cycles"):
+                    break
+            except Exception as e:
+                self.stop()
+                raise e
+        log("Pipeline: All commands have been dispatched", LOG_LEVEL_INFO)
+        proc.q.put(Packet(identifier=idx, phase=PHASE_END, num=2, data=None), block=True)
 
     def stop(self):
         """
-        Stop running processors
+        Stop running processors by setting their signaling their stop events
         :return: None
         """
+        self.stop_evt.set()
         for proc in self.processors:
             proc.stop.set()
 
@@ -75,17 +96,22 @@ class Pipeline(object):
         :return:
         """
         if message == Pipeline.SIG_FINISHED:
+            log("Complete signal received. Pipeline stopping.", LOG_LEVEL_INFO)
             self.stop()
         if message == Pipeline.SIG_ABORT:
-            log("Abort signal sent. Pipeline stopping.", LOG_LEVEL_WARNING)
+            log("Abort signal received. Pipeline stopping.", LOG_LEVEL_WARNING)
             self.stop()
+
+    def setup_defaults(self):
+        self.conf_default("validation_frequency", 500)
+        self.conf_default("cycles", 10000)
 
 
 class Packet(object):
     """
     Packet container for generic data flowing through the pipeline
     """
-    def __init__(self, identifier, phase, num, shapes, data):
+    def __init__(self, identifier, phase, num, data):
         """
         Constructor
         :param identifier: Packet identifier
@@ -98,13 +124,12 @@ class Packet(object):
         self.id = identifier
         self.phase = phase
         self.num = num
-        self.shapes = shapes
         self.data = data
 
 
-class Processor(threading.Thread):
+class Processor(threading.Thread, ConfigMixin):
     """
-    Generic processor class which implements a stage in the pipeline. Each processor may have at max
+    Generic processor class which implements a stage in the pipeline. Each processor may have exactly
     one predecessor and one successor. A processor has to wait until the top level stage is been initialized.
     That guarantees that data is passing forward only after all stages have been through their init phase.
     Each processor has an entry queue where other parts of the pipeline can put data in
@@ -122,13 +147,11 @@ class Processor(threading.Thread):
         :return:
         """
         super(Processor, self).__init__(group=None)
+        self.make_configurable(config)
         self.top = None
         self.bottom = None
         self.name = name
         self.shapes = shapes
-        self.config = config
-        self.is_consumer = True
-        self.is_producer = True
         self.q = Queue.Queue(buffer_size)
         self.ready = threading.Event()
         self.stop = threading.Event()
@@ -140,7 +163,6 @@ class Processor(threading.Thread):
         Override thread run method. Run is being called automatically when the thread has been started via start()
         :return:
         """
-        
         self.init()
         if self.top is not None:
             self.top.ready.wait()
@@ -149,8 +171,6 @@ class Processor(threading.Thread):
             res = self.process()
             if not res:
                 time.sleep(Processor.SPIN_WAIT_TIME)
-        
-
 
     def init(self):
         """
@@ -174,10 +194,10 @@ class Processor(threading.Thread):
         :return:
         """
         has_data = False
-        rval = None
+        value = None
         while not self.stop.is_set():
             try:
-                rval = self.q.get(block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
+                value = self.q.get(block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
                 has_data = True
                 break
             except Queue.Empty:
@@ -185,7 +205,7 @@ class Processor(threading.Thread):
         # Return if no data is there
         if not has_data:
             return None
-        return rval
+        return value
 
     def push(self, data):
         """
@@ -200,6 +220,9 @@ class Processor(threading.Thread):
             except Queue.Full:
                 # In case the queue is empty, return false, wait for spin and check if we have to abort
                 pass
+
+    def setup_defaults(self):
+        pass
 
 
 class H5DBLoader(Processor):
@@ -219,16 +242,12 @@ class H5DBLoader(Processor):
         Open a handle to the database and check if the config is valid and files exist
         :return:
         """
-        assert "db" in self.config
-        self.db_handle = h5py.File(self.config["db"])
-        assert "key_data" in self.config
-        assert "key_label" in self.config
-        assert "chunk_size" in self.config
-        self.data_field = self.db_handle[self.config["key_data"]]
-        self.label_field = self.db_handle[self.config["key_label"]]
+        assert self.conf("db") is not None
+        self.db_handle = h5py.File(self.conf("db"))
+        self.data_field = self.db_handle[self.conf("key_data")]
+        self.label_field = self.db_handle[self.conf("key_label")]
         assert self.data_field.shape[0] == self.label_field.shape[0]
-        split = self.config["split_value"] if "split_value" in self.config else 0.9
-        self.thresh = int(split * self.data_field.shape[0])
+        self.thresh = int(self.conf("split_value") * self.data_field.shape[0])
 
     def process(self):
         """
@@ -237,8 +256,12 @@ class H5DBLoader(Processor):
         :return: Bool
         """
         if self.top is not None:
+            packet = self.pull()
+            if packet is None:
+                return False
+
             log("H5DBLoader: Preloading chunk", LOG_LEVEL_VERBOSE)
-            c_size = self.config["chunk_size"]
+            c_size = self.conf("chunk_size")
             start = time.time()
             upper = min(self.thresh, self.cursor + c_size)
             data = self.data_field[self.cursor:upper]
@@ -249,13 +272,23 @@ class H5DBLoader(Processor):
             if self.cursor > self.thresh:
                 self.cursor = 0
 
-            self.push((data, label))
             end = time.time()
             log("H5DBLoader: Fetching took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+            self.push(Packet(identifier=packet.id,
+                             phase=packet.phase,
+                             num=2,
+                             data=(data, label)))
             return True
         else:
             # No top node found, enter spin wait time
             return False
+
+    def setup_defaults(self):
+        self.conf_default("db", None)
+        self.conf_default("key_label", "label")
+        self.conf_default("key_data", "data")
+        self.conf_default("chunk_size", 320)
+        self.conf_default("split_value", 0.9)
 
 
 class Optimizer(Processor):
@@ -284,10 +317,11 @@ class Optimizer(Processor):
         self.var_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=True)
         self.var_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=True)
         # Load weights if necessary
-        if "weights" in self.config:
-            self.graph.load_weights(self.config["weights"])
+        if self.conf("weights") is not None:
+            self.graph.load_weights(self.conf("weights"))
         # Compile
-        self.graph.compile(train_inputs=[self.var_x, self.var_y], batch_size=self.config["batch_size"], phase=PHASE_TRAIN)
+        self.graph.compile(train_inputs=[self.var_x, self.var_y], batch_size=self.conf("batch_size"), phase=PHASE_TRAIN)
+        log("Optimizer: Compilation finished", LOG_LEVEL_INFO)
         self.idx = 0
 
     def process(self):
@@ -296,47 +330,58 @@ class Optimizer(Processor):
         is made in case the chunk_size of this node differs from the producing node.
         :return: Bool (True)
         """
-        data = self.pull()
+        packet = self.pull()
         # Return if no data is there
-        if not data:
+        if not packet:
             return False
-        train_x, train_y = data
-        start = time.time()
-        assert (train_x.shape[1:] == self.shapes[0][1:]) and (train_y.shape[1:] == self.shapes[1][1:])
-        if self.idx < self.config["iters"]:
-            for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.config["chunk_size"]):
+
+        if packet.phase == PHASE_TRAIN:
+            train_x, train_y = packet.data
+            start = time.time()
+            assert (train_x.shape[1:] == self.shapes[0][1:]) and (train_y.shape[1:] == self.shapes[1][1:])
+            for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.conf("chunk_size")):
                 log("Optimizer: Transferring data to computing device", LOG_LEVEL_VERBOSE)
                 # Assign the chunk to the shared variable
                 self.var_x.set_value(chunk_x, borrow=True)
                 self.var_y.set_value(chunk_y, borrow=True)
                 # Iterate through the chunk
-                n_iters = len(chunk_x) // self.config["batch_size"]
+                n_iters = len(chunk_x) // self.conf("batch_size")
                 for minibatch_index in range(n_iters):
                     log("Optimizer: Computing gradients", LOG_LEVEL_VERBOSE)
                     Dropout.set_dp_on()
                     self.idx += 1
                     minibatch_avg_cost = self.graph.models[TRAIN](
                         minibatch_index,
-                        self.config["learning_rate"],
-                        self.config["momentum"],
-                        self.config["weight_decay"]
+                        self.conf("learning_rate"),
+                        self.conf("momentum"),
+                        self.conf("weight_decay")
                     )
                     # Print in case the freq is ok
-                    if self.idx % self.config["print_freq"] == 0:
+                    if self.idx % self.conf("print_freq") == 0:
                         log("Training score at iteration %i: %s" % (self.idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
-                    if self.idx % self.config["save_freq"] == 0:
+                    if self.idx % self.conf("save_freq") == 0:
                         log("Saving intermediate model state", LOG_LEVEL_INFO)
-                        self.graph.save(self.config["save_prefix"] + "_iter_" + str(self.idx) + ".zip")
-                    # Abort if we reached max iters
-                    if self.idx >= self.config["iters"]:
-                        break
-        # We're done
-        else:
+                        self.graph.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + ".zip")
+            end = time.time()
+            log("Optimizer: Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+            # Return true, we don't want to enter spin waits. Just proceed with the next chunk or stop
+            return True
+        elif packet.phase == PHASE_END:
             self.pipeline.signal(Pipeline.SIG_FINISHED)
-        end = time.time()
-        log("Optimizer: Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
-        # Return true, we don't want to enter spin waits. Just proceed with the next chunk or stop
-        return True
+            return True
+
+    def setup_defaults(self):
+
+        self.conf_default("batch_size", 64)
+        self.conf_default("learning_rate", 0.001)
+        self.conf_default("momentum", 0.9)
+        self.conf_default("weight_decay", 0.0005)
+        self.conf_default("print_freq", 50)
+        self.conf_default("save_freq", 10000)
+        self.conf_default("chunk_size", 320)
+        self.conf_default("weights", None)
+        self.conf_default("save_prefix", "model")
+        self.conf_default("lr_policy", "constant")
 
 
 class Transformer(Processor):
@@ -348,15 +393,18 @@ class Transformer(Processor):
         self.mean = None
 
     def init(self):
-        self.mean=np.load("mean_sampled.npy")
+        if self.conf("mean_file") is not None:
+            self.mean = np.load(self.conf("mean_file"))
+        else:
+            log("Transformer: No mean file specified.", LOG_LEVEL_WARNING)
 
     def process(self):
-        data = self.pull()
+        packet = self.pull()
         # Return if no data is there
-        if not data:
+        if not packet:
             return False
         # Unpack
-        data, label = data
+        data, label = packet.data
         # Do processing
         log("Transformer: Processing data", LOG_LEVEL_VERBOSE)
         i_h = 240
@@ -367,12 +415,13 @@ class Transformer(Processor):
         start = time.time()
         # Mean
         data = data.astype(np.float32)
-        for idx in range(data.shape[0]):
-            # Subtract mean
-            data[idx] = data[idx] - self.mean.astype(np.float32)
+        if self.mean is not None:
+            for idx in range(data.shape[0]):
+                # Subtract mean
+                data[idx] = data[idx] - self.mean.astype(np.float32)
         # Random crops
-        cy = 0#rng.randint(data.shape[2] - i_h, size=1)
-        cx = 0#rng.randint(data.shape[3] - i_w, size=1)
+        cy = rng.randint(data.shape[2] - i_h, size=1)
+        cx = rng.randint(data.shape[3] - i_w, size=1)
         data = data[:, :, cy:cy+i_h, cx:cx+i_w]
 
         # Project image crop corner onto depth scales
@@ -394,13 +443,14 @@ class Transformer(Processor):
             data[idx, 0] = data[idx, 0] * r
             data[idx, 1] = data[idx, 1] * g
             data[idx, 2] = data[idx, 2] * b
-            
 
         end = time.time()
         log("Transformer: Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
         # Try to push into queue as long as thread should not terminate
-        self.push((data, label))
+        self.push(Packet(identifier=packet.id, phase=packet.phase, num=2, data=(data, label)))
         return True
 
+    def setup_defaults(self):
+        self.conf_default("mean_file", None)
 
 
