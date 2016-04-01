@@ -8,6 +8,7 @@ import theano.misc.pkl_utils as pkl_utils
 
 from deepgraph.constants import *
 from deepgraph.utils.logging import *
+from deepgraph.utils.common import ConfigMixin
 
 __docformat__ = 'restructedtext en'
 
@@ -305,7 +306,7 @@ class Graph(object):
         return self.models[INFER](*arguments)
 
 
-class Node(object):
+class Node(ConfigMixin):
     """
     Generic node class. Implements the new config object pattern
     """
@@ -316,9 +317,11 @@ class Node(object):
         :param name: String
         :param is_output: Bool
         :param phase: Int
-        :param config: Dict
         :return: Node
         """
+        # Call to super
+        super(Node, self).__init__()
+        self.make_configurable()
         if graph is None:
             raise ValueError("Nodes need a parent graph to be assigned to.")
         if name is None:
@@ -420,5 +423,10 @@ class Node(object):
         self.outputs.append(successor)
         successor.inputs.append(self)
         return successor
+
+    def setup_defaults(self):
+        self.conf_default("learning_rate", 1.0)
+        self.conf_default("phase", PHASE_ALL)
+        self.conf_default("loss_weight", 0)
 
 

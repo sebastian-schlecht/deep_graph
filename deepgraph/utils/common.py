@@ -2,6 +2,9 @@ import numpy as np
 import theano
 import theano.tensor as T
 
+from deepgraph.utils.logging import *
+from deepgraph.constants import *
+
 
 def batch(iterable, n=1):
     """
@@ -70,4 +73,50 @@ def wrap_shared(array, borrow=True, cast=None):
         return data
     else:
         return T.cast(data, cast)
+
+
+class ConfigMixin(object):
+    """
+    Base object to stuff config functionality into the object
+    """
+    def make_configurable(self, config=None):
+        self.__default_values___ = []
+        self.__config__ = {}
+        self.setup_defaults()
+        if config is not None:
+            assert isinstance(config, dict)
+            # Check keys
+            for key in config:
+                if key not in self.__default_values___:
+                    log("Key '%s' has no default value. Is the spelling correct?" % key, LOG_LEVEL_WARNING)
+                self.__config__[key] = config[key]
+
+    def conf(self, key):
+        """
+        Get the configuration value
+        :param key: String
+        :return:
+        """
+        if key in self.__config__:
+            return self.__config__[key]
+        else:
+            return None
+
+    def conf_default(self, key, value):
+        """
+        Set default value
+        :param key: String
+        :param value: Anytype
+        :return:
+        """
+        self.__default_values___.append(key)
+        if key not in self.__config__:
+            self.__config__[key] = value
+
+    def setup_defaults(self):
+        """
+        Abstract method to setup default values. Has to be implemented by child classes
+        :return:
+        """
+        raise NotImplementedError("Abstract method setup_defaults has to be implemented.")
 
