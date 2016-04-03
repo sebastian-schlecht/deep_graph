@@ -1,4 +1,3 @@
-import numpy as np
 import theano
 import theano.tensor as T
 from theano.tensor.nnet import conv2d
@@ -6,7 +5,6 @@ from theano.tensor.nnet.abstract_conv import get_conv_output_shape
 from theano.tensor.signal.pool import Pool as TPool, pool_2d
 
 from deepgraph.graph import Node
-from deepgraph.constants import *
 from deepgraph.nn.init import (normal, constant)
 
 __docformat__ = 'restructedtext en'
@@ -38,7 +36,7 @@ class Conv2D(Node):
         self.conf_default("channels", None)
         self.conf_default("kernel", None)
         self.conf_default("border_mode", 'valid')
-        self.conf_default("subsample", (1,1))
+        self.conf_default("subsample", (1, 1))
         self.conf_default("activation", T.tanh)
         self.conf_default("weight_filler", normal())
         self.conf_default("bias_filler", constant(1))
@@ -115,7 +113,7 @@ class Upsample(Node):
     Upsample the input tensor along axis 2 and 3. The previous node has to provide 4D output
     """
     def __init__(self, graph, name, config={}):
-        super(Upsample, self).__init__(self, graph, name, config=config)
+        super(Upsample, self).__init__(graph, name, config=config)
 
     def setup_defaults(self):
         super(Upsample, self).setup_defaults()
@@ -141,7 +139,7 @@ class Pool(Node):
     Downsample using the Theano pooling module
     """
     def __init__(self, graph, name, config={}):
-        super(Pool, self).__init__(graph, name, config={})
+        super(Pool, self).__init__(graph, name, config=config)
 
     def setup_defaults(self):
         super(Pool, self).setup_defaults()
@@ -193,11 +191,7 @@ class LRN(Node):
         Constructor
         :param graph: Graph
         :param name: String
-        :param alpha: Float
-        :param k: Int
-        :param beta: Float
-        :param n: Int
-        :param is_output: Bool
+        :param config: Dict
         :return: Node
         """
         super(LRN, self).__init__(graph, name, config=config)

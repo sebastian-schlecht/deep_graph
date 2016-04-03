@@ -149,6 +149,7 @@ if __name__ == "__main__":
     })
 
     p = Pipeline(config={
+        "validation_frequency": 1,
         "cycles": 20000
     })
     p.add(db_loader)

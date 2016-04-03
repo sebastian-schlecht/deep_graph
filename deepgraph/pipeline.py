@@ -7,7 +7,7 @@ import numpy as np
 import h5py
 
 from deepgraph.utils.logging import log
-from deepgraph.utils.common import batch_parallel, ConfigMixin
+from deepgraph.utils.common import batch_parallel, ConfigMixin, shuffle_in_unison_inplace
 from deepgraph.constants import *
 from deepgraph.conf import rng
 from deepgraph.nn.core import Dropout
@@ -64,7 +64,7 @@ class Pipeline(ConfigMixin):
         proc = self.processors[0]
         if proc is None:
             raise AssertionError("At least one processor needed to make a pipeline run.")
-        log("Pipeline: Starting computation", LOG_LEVEL_INFO)
+        log("Pipeline - Starting computation", LOG_LEVEL_INFO)
         while not self.stop_evt.is_set():
             try:
                 proc.q.put(Packet(identifier=idx, phase=PHASE_TRAIN, num=2, data=None), block=True)
@@ -77,7 +77,7 @@ class Pipeline(ConfigMixin):
             except Exception as e:
                 self.stop()
                 raise e
-        log("Pipeline: All commands have been dispatched", LOG_LEVEL_INFO)
+        log("Pipeline - All commands have been dispatched", LOG_LEVEL_INFO)
         proc.q.put(Packet(identifier=idx, phase=PHASE_END, num=2, data=None), block=True)
 
     def stop(self):
@@ -96,10 +96,10 @@ class Pipeline(ConfigMixin):
         :return:
         """
         if message == Pipeline.SIG_FINISHED:
-            log("Complete signal received. Pipeline stopping.", LOG_LEVEL_INFO)
+            log("Pipeline - Complete signal received. Pipeline stopping.", LOG_LEVEL_INFO)
             self.stop()
         if message == Pipeline.SIG_ABORT:
-            log("Abort signal received. Pipeline stopping.", LOG_LEVEL_WARNING)
+            log("Pipeline - Abort signal received. Pipeline stopping.", LOG_LEVEL_WARNING)
             self.stop()
 
     def setup_defaults(self):
@@ -259,21 +259,27 @@ class H5DBLoader(Processor):
             packet = self.pull()
             if packet is None:
                 return False
-
-            log("H5DBLoader: Preloading chunk", LOG_LEVEL_VERBOSE)
-            c_size = self.conf("chunk_size")
+            log("H5DBLoader - Preloading chunk", LOG_LEVEL_VERBOSE)
             start = time.time()
-            upper = min(self.thresh, self.cursor + c_size)
-            data = self.data_field[self.cursor:upper]
-            label = self.label_field[self.cursor:upper]
+            if packet.phase == PHASE_TRAIN:
+                c_size = self.conf("chunk_size")
+                upper = min(self.thresh, self.cursor + c_size)
+                data = self.data_field[self.cursor:upper]
+                label = self.label_field[self.cursor:upper]
 
-            self.cursor += c_size
-            # Reset cursor in case we exceeded the array ranges
-            if self.cursor > self.thresh:
-                self.cursor = 0
+                self.cursor += c_size
+                # Reset cursor in case we exceeded the array ranges
+                if self.cursor > self.thresh:
+                    self.cursor = 0
+
+            # Load entire validation data for now (one val cycle)
+            elif packet.phase == PHASE_VAL:
+                upper = self.data_field.shape[0]
+                data = self.data_field[self.thresh:upper]
+                label = self.label_field[self.thresh:upper]
 
             end = time.time()
-            log("H5DBLoader: Fetching took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+            log("H5DBLoader - Fetching took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
             self.push(Packet(identifier=packet.id,
                              phase=packet.phase,
                              num=2,
@@ -303,9 +309,15 @@ class Optimizer(Processor):
         assert graph is not None
         self.graph = graph
         # Shared vars
-        self.var_x = None
-        self.var_y = None
+        self.train_x = None
+        self.train_y = None
+
+        self.val_x = None
+        self.val_y = None
+        # Iteration index
         self.idx = 0
+        # Train losses
+        self.losses = []
 
     def init(self):
         """
@@ -314,14 +326,21 @@ class Optimizer(Processor):
         :return: None
         """
         # Theano shared variables
-        self.var_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=True)
-        self.var_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=True)
+        self.train_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=True)
+        self.train_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=True)
+
+        self.val_x = theano.shared(np.ones(self.shapes[0], dtype=theano.config.floatX), borrow=True)
+        self.val_y = theano.shared(np.ones(self.shapes[1], dtype=theano.config.floatX), borrow=True)
         # Load weights if necessary
         if self.conf("weights") is not None:
             self.graph.load_weights(self.conf("weights"))
         # Compile
-        self.graph.compile(train_inputs=[self.var_x, self.var_y], batch_size=self.conf("batch_size"), phase=PHASE_TRAIN)
-        log("Optimizer: Compilation finished", LOG_LEVEL_INFO)
+        self.graph.compile(
+            train_inputs=[self.train_x, self.train_y],
+            val_inputs=[self.val_x, self.val_y],
+            batch_size=self.conf("batch_size"),
+            phase=PHASE_TRAIN)
+        log("Optimizer - Compilation finished", LOG_LEVEL_INFO)
         self.idx = 0
 
     def process(self):
@@ -334,20 +353,20 @@ class Optimizer(Processor):
         # Return if no data is there
         if not packet:
             return False
-
+        # Train phase
         if packet.phase == PHASE_TRAIN:
             train_x, train_y = packet.data
             start = time.time()
             assert (train_x.shape[1:] == self.shapes[0][1:]) and (train_y.shape[1:] == self.shapes[1][1:])
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.conf("chunk_size")):
-                log("Optimizer: Transferring data to computing device", LOG_LEVEL_VERBOSE)
+                log("Optimizer - Transferring data to computing device", LOG_LEVEL_VERBOSE)
                 # Assign the chunk to the shared variable
-                self.var_x.set_value(chunk_x, borrow=True)
-                self.var_y.set_value(chunk_y, borrow=True)
+                self.train_x.set_value(chunk_x, borrow=True)
+                self.train_y.set_value(chunk_y, borrow=True)
                 # Iterate through the chunk
                 n_iters = len(chunk_x) // self.conf("batch_size")
                 for minibatch_index in range(n_iters):
-                    log("Optimizer: Computing gradients", LOG_LEVEL_VERBOSE)
+                    log("Optimizer - Computing gradients", LOG_LEVEL_VERBOSE)
                     Dropout.set_dp_on()
                     self.idx += 1
                     minibatch_avg_cost = self.graph.models[TRAIN](
@@ -356,16 +375,52 @@ class Optimizer(Processor):
                         self.conf("momentum"),
                         self.conf("weight_decay")
                     )
+                    # Save losses
+                    self.losses.append(minibatch_avg_cost)
                     # Print in case the freq is ok
                     if self.idx % self.conf("print_freq") == 0:
                         log("Training score at iteration %i: %s" % (self.idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
                     if self.idx % self.conf("save_freq") == 0:
                         log("Saving intermediate model state", LOG_LEVEL_INFO)
                         self.graph.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + ".zip")
+                        # Dump loss too
+                        np_loss = np.array(self.losses)
+                        np.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.npy", np_loss)
             end = time.time()
-            log("Optimizer: Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+            log("Optimizer - Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
             # Return true, we don't want to enter spin waits. Just proceed with the next chunk or stop
             return True
+        # Validation phase
+        elif packet.phase == PHASE_VAL:
+            # Make sure we've got validation functions
+            assert VAL in self.graph.models and self.graph.models[VAL] is not None
+            log("Optimizer: Entering validation cycle", LOG_LEVEL_VERBOSE)
+            train_x, train_y = packet.data
+            start = time.time()
+            results = []
+            for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.conf("chunk_size")):
+                log("Optimizer - Transferring data to computing device", LOG_LEVEL_VERBOSE)
+                # Assign the chunk to the shared variable
+                self.val_x.set_value(chunk_x, borrow=True)
+                self.val_y.set_value(chunk_y, borrow=True)
+                # Iterate through the chunk
+                n_iters = len(chunk_x) // self.conf("batch_size")
+
+                for minibatch_index in range(n_iters):
+                    log("Optimizer - Computing gradients", LOG_LEVEL_VERBOSE)
+                    Dropout.set_dp_off()
+                    minibatch_avg_cost = self.graph.models[VAL](
+                        minibatch_index
+                    )
+                    results.append(minibatch_avg_cost)
+            end = time.time()
+            log("Optimizer - Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+            # Compute mean validation loss
+            np_losses = np.array(results)
+            mean = np.mean(np_losses, axis=0)
+            log("Optimizer - Mean loss value for validation at iteration " + str(self.idx) + " is: " + str(mean), LOG_LEVEL_INFO)
+            return True
+
         elif packet.phase == PHASE_END:
             self.pipeline.signal(Pipeline.SIG_FINISHED)
             return True
@@ -396,7 +451,7 @@ class Transformer(Processor):
         if self.conf("mean_file") is not None:
             self.mean = np.load(self.conf("mean_file"))
         else:
-            log("Transformer: No mean file specified.", LOG_LEVEL_WARNING)
+            log("Transformer - No mean file specified.", LOG_LEVEL_WARNING)
 
     def process(self):
         packet = self.pull()
@@ -406,7 +461,7 @@ class Transformer(Processor):
         # Unpack
         data, label = packet.data
         # Do processing
-        log("Transformer: Processing data", LOG_LEVEL_VERBOSE)
+        log("Transformer - Processing data", LOG_LEVEL_VERBOSE)
         i_h = 240
         i_w = 320
 
@@ -419,33 +474,46 @@ class Transformer(Processor):
             for idx in range(data.shape[0]):
                 # Subtract mean
                 data[idx] = data[idx] - self.mean.astype(np.float32)
-        # Random crops
-        cy = rng.randint(data.shape[2] - i_h, size=1)
-        cx = rng.randint(data.shape[3] - i_w, size=1)
-        data = data[:, :, cy:cy+i_h, cx:cx+i_w]
+        if packet.phase == PHASE_TRAIN:
+            # Random crops
+            cy = rng.randint(data.shape[2] - i_h, size=1)
+            cx = rng.randint(data.shape[3] - i_w, size=1)
+            data = data[:, :, cy:cy+i_h, cx:cx+i_w]
 
-        # Project image crop corner onto depth scales
-        cy = int(float(cy) * (float(d_h)/float(i_h)))
-        cx = int(float(cx) * (float(d_w)/float(i_w)))
-        label = label[:, cy:cy+d_h, cx:cx+d_w]
+            # Project image crop corner onto depth scales
+            cy = int(float(cy) * (float(d_h)/float(i_h)))
+            cx = int(float(cx) * (float(d_w)/float(i_w)))
+            label = label[:, cy:cy+d_h, cx:cx+d_w]
 
-        # Do elementwise operations
-        for idx in range(data.shape[0]):
-            # Flip with probability 0.5
-            p = rng.randint(2)
-            if p > 0:
-                data[idx] = data[idx, :, :, ::-1]
-                label[idx] = label[idx, :, ::-1]
-            # RGB we mult with a random value between 0.8 and 1.2
-            r = rng.randint(80,121) / 100.
-            g = rng.randint(80,121) / 100.
-            b = rng.randint(80,121) / 100.
-            data[idx, 0] = data[idx, 0] * r
-            data[idx, 1] = data[idx, 1] * g
-            data[idx, 2] = data[idx, 2] * b
+            # Do elementwise operations
+            for idx in range(data.shape[0]):
+                # Flip with probability 0.5
+                p = rng.randint(2)
+                if p > 0:
+                    data[idx] = data[idx, :, :, ::-1]
+                    label[idx] = label[idx, :, ::-1]
+                # RGB we mult with a random value between 0.8 and 1.2
+                r = rng.randint(80,121) / 100.
+                g = rng.randint(80,121) / 100.
+                b = rng.randint(80,121) / 100.
+                data[idx, 0] = data[idx, 0] * r
+                data[idx, 1] = data[idx, 1] * g
+                data[idx, 2] = data[idx, 2] * b
 
+            # Shuffle
+            data, label = shuffle_in_unison_inplace(data, label)
+        elif packet.phase == PHASE_VAL:
+            # Center crop
+            cy = (data.shape[2] - i_h) // 2
+            cx = (data.shape[3] - i_w) // 2
+            data = data[:, :, cy:cy+i_h, cx:cx+i_w]
+
+            # Project image crop corner onto depth scales
+            cy = int(float(cy) * (float(d_h)/float(i_h)))
+            cx = int(float(cx) * (float(d_w)/float(i_w)))
+            label = label[:, cy:cy+d_h, cx:cx+d_w]
         end = time.time()
-        log("Transformer: Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+        log("Transformer - Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
         # Try to push into queue as long as thread should not terminate
         self.push(Packet(identifier=packet.id, phase=packet.phase, num=2, data=(data, label)))
         return True
