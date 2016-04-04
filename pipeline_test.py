@@ -95,7 +95,13 @@ def build_graph():
         "is_output": True
     })
 
-    loss            = LogarithmicScaleInvariantLoss(graph, "loss")
+    loss            = EuclideanLoss(graph, "loss")
+
+    error = MSE(graph, "mse", config={
+        "root": True,
+        "is_output": True,
+        "phase": PHASE_TRAIN
+    })
 
     # Connect
     data.connect(conv_0)
@@ -116,6 +122,9 @@ def build_graph():
     rs.connect(loss)
     label.connect(loss)
 
+    label.connect(error)
+    rs.connect(error)
+
     return graph
 
 
@@ -130,7 +139,7 @@ if __name__ == "__main__":
     # Build the training pipeline
     db_loader = H5DBLoader("db", ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)), config={
         # "db": '/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_sampled.hdf5',
-        "db": 'data/nyu_depth_v2_sampled.hdf5',
+        "db": 'data/nyu_depth_combined.hdf5',
         "key_data": "images",
         "key_label": "depths",
         "chunk_size": chunk_size

@@ -273,6 +273,79 @@ class Dense(Node):
             else self.conf("activation")(lin_output)
         )
 
+
+class Concatenate(Node):
+    # TODO Make this work for an arbitrary amount of inputs
+    """
+    Concatenate two tensor along an axis
+    """
+    def __init__(self, graph, name, config={}):
+        """
+        Constructor
+        :param graph: Graph
+        :param name: Name
+        :param config: config
+        :return:
+        """
+        super(Concatenate, self).__init__(graph, name, config=config)
+
+    def setup_defaults(self):
+        super(Concatenate, self).setup_defaults()
+        self.conf_default("axis", 0)
+
+    def alloc(self):
+        if len(self.inputs) != 2:
+            raise AssertionError("Concat nodes need exactly two nodes.")
+        for s in range(len(self.inputs[0].shape)):
+            if (self.inputs[0].shape[s] != self.inputs[1].shape[s]) and s != self.conf("axis"):
+                raise AssertionError("Inputs have to be of the same dimension except for the axis to concatenate along.")
+        # Compute new shape
+        c_dim = self.inputs[0].shape[self.conf("axis")] + self.inputs[1].shape[self.conf("axis")]
+        # Tuples are immutable, make an array instead and transform into a tuple afterwards
+        new_shape = [s for s in self.inputs[0].shape]
+        new_shape[self.conf("axis")] = c_dim
+        self.output_shape = (s for s in new_shape)
+
+    def forward(self):
+        in_0 = self.inputs[0].expression
+        in_1 = self.inputs[1].expression
+
+        self.expression = T.concatenate([in_0, in_1], axis=self.conf("axis"))
+
+
+class MSE(Node):
+    """
+    Compute the MSE for regression tasks
+    """
+    def __init__(self, graph, name, config={}):
+        """
+        Constructor
+        :param graph: Graph
+        :param name: String
+        :param config: Dict
+        :return:
+        """
+        super(MSE, self).__init__(graph, name, config=config)
+        self.is_error = True
+
+    def setup_defaults(self):
+        super(MSE, self).setup_defaults()
+        self.conf_default("root", False)
+
+    def alloc(self):
+        if len(self.inputs) != 2:
+            raise AssertionError("MSE needs exactly two inputs to compute an error")
+        self.output_shape = (1,)
+
+    def forward(self):
+        in_0 = self.inputs[0].expression
+        in_1 = self.inputs[1].expression
+
+        self.expression = T.mean((in_0 - in_1) ** 2)
+        if self.conf("root"):
+            self.expression = T.sqrt(self.expression)
+
+
 class Error(Node):
     """
     Computes the mean error for classification tasks

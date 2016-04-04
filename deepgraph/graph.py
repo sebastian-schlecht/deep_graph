@@ -125,15 +125,17 @@ class Graph(object):
         costs = []
         params = []
         learning_rates = []
-        outputs = []
+        outputs = {}
         for node in self.nodes:
             # Collect error
             if node.is_error is True:
-                outputs.append(node.expression)
+                # outputs.append(node.expression)
+                outputs[node.name] = node.expression
             # Collect cost
             if node.is_loss:
                 costs.append((node.conf("loss_weight"), node.expression))
-                outputs.append(node.expression)
+                # outputs.append(node.expression)
+                outputs[node.name] = node.expression
             # Collect parameters
             if node.computes_gradient and len(node.params) > 0:
                 # Add the nodes parameters to the local list
@@ -217,11 +219,11 @@ class Graph(object):
         # In case we also need to build an inference model, compile an apropriate one
         if phase is PHASE_ALL or phase is PHASE_INFER:
             infer_in = []
-            infer_out = []
+            infer_out = {}
             for node in self.nodes:
                 if node.conf("phase") == PHASE_ALL or node.conf("phase") == PHASE_INFER:
                     if node.conf("is_output"):
-                        infer_out.append(node.expression)
+                        infer_out[node.name] = node.expression
                     elif node.is_data:
                         infer_in.append(node.expression)
             self.models[INFER] = theano.function(

@@ -276,6 +276,9 @@ class H5DBLoader(Processor):
                 upper = self.data_field.shape[0]
                 data = self.data_field[self.thresh:upper]
                 label = self.label_field[self.thresh:upper]
+            # End phase or unknown
+            else:
+                data, label = (None, None)
 
             end = time.time()
             log("H5DBLoader - Fetching took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
