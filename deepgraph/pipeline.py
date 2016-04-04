@@ -71,7 +71,6 @@ class Pipeline(ConfigMixin):
                 idx += 1
                 if (idx % self.conf("validation_frequency")) == 0:
                     proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True)
-                    idx += 1
                 if idx >= self.conf("cycles"):
                     break
             except Exception as e:
@@ -82,7 +81,7 @@ class Pipeline(ConfigMixin):
 
     def stop(self):
         """
-        Stop running processors by setting their signaling their stop events
+        Stop running processors by signaling their stop events
         :return: None
         """
         self.stop_evt.set()

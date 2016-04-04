@@ -95,7 +95,7 @@ def build_graph():
         "is_output": True
     })
 
-    loss            = EuclideanLoss(graph, "loss")
+    loss            = LogarithmicScaleInvariantLoss(graph, "loss")
 
     # Connect
     data.connect(conv_0)
