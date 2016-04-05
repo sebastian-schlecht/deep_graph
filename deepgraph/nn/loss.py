@@ -163,13 +163,17 @@ class EuclideanLoss(Node):
         self.conf_default("loss_weight", 1.0)
 
     def alloc(self):
-            self.output_shape = (1,)
+        if len(self.inputs) != 2:
+            raise AssertionError("This node needs exactly two inputs to calculate loss.")
+        in_0 = self.inputs[0].output_shape
+        in_1 = self.inputs[1].output_shape
+        if in_0 != in_1:
+            raise AssertionError("Input shapes have to be equal.")
+        self.output_shape = (1,)
 
     def forward(self):
-            if len(self.inputs) != 2:
-                raise AssertionError("This node needs exactly two inputs to calculate loss.")
-            # Define our forward function
-            in_0 = self.inputs[0].expression
-            in_1 = self.inputs[1].expression
+        # Define our forward function
+        in_0 = self.inputs[0].expression
+        in_1 = self.inputs[1].expression
 
-            self.expression = T.mean((in_0 - in_1) ** 2)
+        self.expression = T.mean((in_0 - in_1) ** 2)

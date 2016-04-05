@@ -125,7 +125,7 @@ class Upsample(Node):
         in_shape = self.inputs[0].output_shape
         if len(in_shape) != 4:
             raise AssertionError("Input has to be 4D.")
-        if in_shape[3] == 0 or in_shape[4] == 0:
+        if in_shape[2] == 0 or in_shape[3] == 0:
             raise AssertionError("Input shape is invalid.")
         self.output_shape = (in_shape[0], in_shape[1], in_shape[2] * self.conf("kernel")[0], in_shape[3] * self.conf("kernel")[1])
 
