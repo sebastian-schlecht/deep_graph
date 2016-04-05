@@ -7,7 +7,7 @@ import numpy as np
 import h5py
 
 from deepgraph.utils.logging import log
-from deepgraph.utils.common import batch_parallel, ConfigMixin, shuffle_in_unison_inplace
+from deepgraph.utils.common import batch_parallel, ConfigMixin, shuffle_in_unison_inplace, pickle_dump
 from deepgraph.constants import *
 from deepgraph.conf import rng
 from deepgraph.nn.core import Dropout
@@ -386,8 +386,9 @@ class Optimizer(Processor):
                         log("Saving intermediate model state", LOG_LEVEL_INFO)
                         self.graph.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + ".zip")
                         # Dump loss too
-                        np_loss = np.array(self.losses)
-                        np.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.npy", np_loss)
+                        pickle_dump(self.losses, self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.pkl")
+                        # np_loss = np.array(self.losses)
+                        # np.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.npy", np_loss)
             end = time.time()
             log("Optimizer - Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
             # Return true, we don't want to enter spin waits. Just proceed with the next chunk or stop
@@ -399,7 +400,7 @@ class Optimizer(Processor):
             log("Optimizer: Entering validation cycle", LOG_LEVEL_VERBOSE)
             train_x, train_y = packet.data
             start = time.time()
-            results = []
+            results = {}
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.conf("chunk_size")):
                 log("Optimizer - Transferring data to computing device", LOG_LEVEL_VERBOSE)
                 # Assign the chunk to the shared variable
@@ -414,13 +415,17 @@ class Optimizer(Processor):
                     minibatch_avg_cost = self.graph.models[VAL](
                         minibatch_index
                     )
-                    results.append(minibatch_avg_cost)
+                    for key in minibatch_avg_cost:
+                        if key not in results:
+                            results[key] = []
+                        results[key].append(minibatch_avg_cost[key])
+            # Compute mean values
+            for key in results:
+                val = np.array(results[key])
+                results[key] = val.mean()
             end = time.time()
             log("Optimizer - Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
-            # Compute mean validation loss
-            np_losses = np.array(results)
-            mean = np.mean(np_losses, axis=0)
-            log("Optimizer - Mean loss value for validation at iteration " + str(self.idx) + " is: " + str(mean), LOG_LEVEL_INFO)
+            log("Optimizer - Mean loss values for validation at iteration " + str(self.idx) + " is: " + str(results), LOG_LEVEL_INFO)
             return True
 
         elif packet.phase == PHASE_END:
@@ -471,11 +476,15 @@ class Transformer(Processor):
         d_w = 80
         start = time.time()
         # Mean
-        data = data.astype(np.float32)
-        if self.mean is not None:
-            for idx in range(data.shape[0]):
-                # Subtract mean
-                data[idx] = data[idx] - self.mean.astype(np.float32)
+        if packet.phase == PHASE_TRAIN or packet.phase == PHASE_VAL:
+            data = data.astype(np.float32)
+            if self.mean is not None:
+                for idx in range(data.shape[0]):
+                    # Subtract mean
+                    data[idx] = data[idx] - self.mean.astype(np.float32)
+            if self.conf("offset") is not None:
+                label -= self.conf("offset")
+
         if packet.phase == PHASE_TRAIN:
             # Random crops
             cy = rng.randint(data.shape[2] - i_h, size=1)
@@ -522,5 +531,6 @@ class Transformer(Processor):
 
     def setup_defaults(self):
         self.conf_default("mean_file", None)
+        self.conf_default("offset", None)
 
 

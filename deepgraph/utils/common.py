@@ -1,6 +1,8 @@
 import numpy as np
 import theano
 import theano.tensor as T
+import six.moves.cPickle as pickle
+
 
 from deepgraph.utils.logging import *
 from deepgraph.constants import *
@@ -73,6 +75,25 @@ def wrap_shared(array, borrow=True, cast=None):
         return data
     else:
         return T.cast(data, cast)
+
+
+def pickle_dump(obj, filename):
+    """
+    Write an object to a location in pickling format
+    :param obj: Any object
+    :param filename: String
+    :return:
+    """
+    pickle.dump(obj, open(filename, "wb"))
+
+
+def pickle_load(filename):
+    """
+    Load an object in pickling format
+    :param filename: String
+    :return:
+    """
+    return pickle.load(open(filename, "rb"))
 
 
 class ConfigMixin(object):

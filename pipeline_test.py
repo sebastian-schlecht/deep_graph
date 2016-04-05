@@ -144,7 +144,10 @@ if __name__ == "__main__":
         "key_label": "depths",
         "chunk_size": chunk_size
     })
-    transformer = Transformer("tr", transfer_shape, config={})
+    transformer = Transformer("tr", transfer_shape, config={
+        # Measured empirically for the data-set
+        "offset": 2.7321029
+    })
     optimizer = Optimizer("opt", g, transfer_shape, config={
         "batch_size":  batch_size,
         "chunk_size": chunk_size,
