@@ -134,8 +134,8 @@ def build_u_graph():
     """
     Inputs
     """
-    data = Data(graph, "data", T.ftensor4, shape=(-1, 3, 240, 320))
-    label = Data(graph, "label", T.ftensor3, shape=(-1, 1, 60, 80), config={
+    data = Data(graph, "data", T.ftensor4, shape=(-1, 3, 452, 452))
+    label = Data(graph, "label", T.ftensor3, shape=(-1, 1, 260, 260), config={
         "phase": PHASE_TRAIN
     })
     """
@@ -158,7 +158,8 @@ def build_u_graph():
             "channels": 64,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.058)
         }
     )
     pool_2 = Pool(graph, "pool_2", config={
@@ -171,7 +172,8 @@ def build_u_graph():
             "channels": 128,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.058)
         }
     )
     conv_4 = Conv2D(
@@ -181,7 +183,8 @@ def build_u_graph():
             "channels": 128,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.041)
         }
     )
     pool_4 = Pool(graph, "pool_4", config={
@@ -195,7 +198,8 @@ def build_u_graph():
             "channels": 256,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.041)
         }
     )
     conv_6 = Conv2D(
@@ -205,7 +209,8 @@ def build_u_graph():
             "channels": 256,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.029)
         }
     )
 
@@ -220,7 +225,8 @@ def build_u_graph():
             "channels": 512,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.029)
         }
     )
     conv_8 = Conv2D(
@@ -230,7 +236,8 @@ def build_u_graph():
             "channels": 512,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.0208)
         }
     )
     pool_8 = Pool(graph, "pool_8", config={
@@ -244,7 +251,8 @@ def build_u_graph():
             "channels": 1024,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.0208)
         }
     )
     conv_10 = Conv2D(
@@ -254,7 +262,8 @@ def build_u_graph():
                 "channels": 1024,
                 "kernel": (3, 3),
                 "subsample": (1, 1),
-                "activation": relu
+                "activation": relu,
+                "weight_filler": normal(0, 0.014)
             }
     )
 
@@ -269,8 +278,9 @@ def build_u_graph():
         "conv_11",
         config={
             "channels": 512,
-            "kernel": (2, 2),
-            "activation": relu
+            "kernel": (3, 3),
+            "border_mode": 1,
+            "weight_filler": normal(0, 0.014)
         }
     )
     # TODO Insert concat
@@ -281,7 +291,8 @@ def build_u_graph():
             "channels": 512,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.014)
         }
     )
     conv_13 = Conv2D(
@@ -291,7 +302,8 @@ def build_u_graph():
             "channels": 512,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.0208)
         }
     )
     up_14 = Upsample(graph, "up_14", config={
@@ -302,9 +314,9 @@ def build_u_graph():
         "conv_14",
         config={
             "channels": 256,
-            "kernel": (2, 2),
-            "subsample": (1, 1),
-            "activation": relu
+            "kernel": (3, 3),
+            "border_mode": 1,
+            "weight_filler": normal(0, 0.0208)
         }
     )
     # TODO Insert concat
@@ -315,7 +327,8 @@ def build_u_graph():
             "channels": 256,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.029)
         }
     )
     conv_16 = Conv2D(
@@ -325,7 +338,8 @@ def build_u_graph():
             "channels": 256,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.029)
         }
     )
 
@@ -334,9 +348,9 @@ def build_u_graph():
     })
     conv_17 = Conv2D(graph, "conv_17", config={
             "channels": 128,
-            "kernel": (2, 2),
-            "subsample": (1, 1),
-            "activation": relu
+            "kernel": (3, 3),
+            "border_mode": 1,
+            "weight_filler": normal(0, 0.029)
     })
     conv_18 = Conv2D(
         graph,
@@ -345,7 +359,8 @@ def build_u_graph():
             "channels": 128,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.041)
         }
     )
     conv_19 = Conv2D(
@@ -355,7 +370,8 @@ def build_u_graph():
             "channels": 128,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.041)
         }
     )
     up_20 = Upsample(graph, "up_20", config={
@@ -363,9 +379,9 @@ def build_u_graph():
     })
     conv_20 = Conv2D(graph, "conv_20", config={
             "channels": 64,
-            "kernel": (2, 2),
-            "subsample": (1, 1),
-            "activation": relu
+            "kernel": (3, 3),
+            "border_mode": 1,
+            "weight_filler": normal(0, 0.041)
     })
     conv_21 = Conv2D(
         graph,
@@ -374,7 +390,8 @@ def build_u_graph():
             "channels": 64,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.058)
         }
     )
     conv_22 = Conv2D(
@@ -384,7 +401,8 @@ def build_u_graph():
             "channels": 64,
             "kernel": (3, 3),
             "subsample": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.058)
         }
     )
     conv_23 = Conv2D(
@@ -393,10 +411,11 @@ def build_u_graph():
         config={
             "channels": 1,
             "kernel": (1, 1),
-            "activation": relu
+            "activation": relu,
+            "weight_filler": normal(0, 0.058)
         }
     )
-
+    """
     fl = Flatten(graph, "flatten", config={
         "dims": 2
     })
@@ -409,6 +428,7 @@ def build_u_graph():
         "shape": (-1, 1, 60, 80),
         "is_output": True
     })
+    """
 
 
     """
@@ -458,32 +478,34 @@ def build_u_graph():
     conv_21.connect(conv_22)
     conv_22.connect(conv_23)
 
-    conv_23.connect(fl)
+    conv_23.connect(loss)
+    """
     fl.connect(fc_1)
     fc_1.connect(rs)
     rs.connect(loss)
-
+    """
     label.connect(loss)
 
-    rs.connect(error)
+    conv_23.connect(error)
     label.connect(error)
 
     return graph
 
 
 
+
 if __name__ == "__main__":
 
-    batch_size = 64
+    batch_size = 4
     chunk_size = 10*batch_size
-    transfer_shape = ((chunk_size, 3, 240, 320), (chunk_size, 60, 80))
+    transfer_shape = ((chunk_size, 3, 452, 452), (chunk_size, 260, 260))
 
     g = build_u_graph()
 
     # Build the training pipeline
     db_loader = H5DBLoader("db", ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)), config={
         # "db": '/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_sampled.hdf5',
-        "db": 'data/nyu_depth_combined.hdf5',
+        "db": 'data/nyu_depth_unet.hdf5',
         "key_data": "images",
         "key_label": "depths",
         "chunk_size": chunk_size
@@ -496,7 +518,7 @@ if __name__ == "__main__":
         "batch_size":  batch_size,
         "chunk_size": chunk_size,
         "learning_rate": 0.01,
-        "momentum": 0.9,
+        "momentum": 0.95,
         "weight_decay": 0.0005,
         "print_freq": 1,
         "save_freq": 30000,
@@ -505,7 +527,7 @@ if __name__ == "__main__":
     })
 
     p = Pipeline(config={
-        "validation_frequency": 1,
+        "validation_frequency": 50,
         "cycles": 20000
     })
     p.add(db_loader)

@@ -30,7 +30,6 @@ class Conv2D(Node):
         self.filter_shape = None
         self.image_shape = None
 
-
     def setup_defaults(self):
         super(Conv2D, self).setup_defaults()
         self.conf_default("channels", None)
@@ -75,7 +74,6 @@ class Conv2D(Node):
         fake_shape = (1, self.image_shape[1], self.image_shape[2], self.image_shape[3])
         # We start with output shapes for conv ops
         self.output_shape = get_conv_output_shape(image_shape=fake_shape, kernel_shape=self.filter_shape, border_mode=self.conf("border_mode"), subsample=self.conf("subsample"))
-        # But we also do pooling, keep that in mind
         # When propagating data, we keep the n in (n,c,h,w) fixed to -1 to make theano
         # infer it during runtime
         self.output_shape = (in_shape[0], self.output_shape[1], self.output_shape[2], self.output_shape[3])
@@ -102,10 +100,11 @@ class Conv2D(Node):
                 border_mode=self.conf("border_mode"),
                 subsample=self.conf("subsample")
             ) + self.b.dimshuffle('x', 0, 'x', 'x')
+
         # Build final expression
         if self.conf("activation") is None:
             raise AssertionError("Conv/Pool nodes need an activation function.")
-        self.expression = self.conf("activation")(conv_out )
+        self.expression = self.conf("activation")(conv_out)
 
 
 class Upsample(Node):

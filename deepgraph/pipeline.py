@@ -292,6 +292,7 @@ class H5DBLoader(Processor):
             return False
 
     def setup_defaults(self):
+        super(H5DBLoader, self).setup_defaults()
         self.conf_default("db", None)
         self.conf_default("key_label", "label")
         self.conf_default("key_data", "data")
@@ -381,9 +382,9 @@ class Optimizer(Processor):
                     self.losses.append(minibatch_avg_cost)
                     # Print in case the freq is ok
                     if self.idx % self.conf("print_freq") == 0:
-                        log("Training score at iteration %i: %s" % (self.idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
+                        log("Optimizer - Training score at iteration %i: %s" % (self.idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
                     if self.idx % self.conf("save_freq") == 0:
-                        log("Saving intermediate model state", LOG_LEVEL_INFO)
+                        log("Optimizer - Saving intermediate model state", LOG_LEVEL_INFO)
                         self.graph.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + ".zip")
                         # Dump loss too
                         pickle_dump(self.losses, self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.pkl")
@@ -397,7 +398,7 @@ class Optimizer(Processor):
         elif packet.phase == PHASE_VAL:
             # Make sure we've got validation functions
             assert VAL in self.graph.models and self.graph.models[VAL] is not None
-            log("Optimizer: Entering validation cycle", LOG_LEVEL_VERBOSE)
+            log("Optimizer - Entering validation cycle", LOG_LEVEL_VERBOSE)
             train_x, train_y = packet.data
             start = time.time()
             results = {}
@@ -433,7 +434,7 @@ class Optimizer(Processor):
             return True
 
     def setup_defaults(self):
-
+        super(Optimizer, self).setup_defaults()
         self.conf_default("batch_size", 64)
         self.conf_default("learning_rate", 0.001)
         self.conf_default("momentum", 0.9)
@@ -469,11 +470,11 @@ class Transformer(Processor):
         data, label = packet.data
         # Do processing
         log("Transformer - Processing data", LOG_LEVEL_VERBOSE)
-        i_h = 240
-        i_w = 320
+        i_h = 452
+        i_w = 452
 
-        d_h = 60
-        d_w = 80
+        d_h = 260
+        d_w = 260
         start = time.time()
         # Mean
         if packet.phase == PHASE_TRAIN or packet.phase == PHASE_VAL:
@@ -530,6 +531,7 @@ class Transformer(Processor):
         return True
 
     def setup_defaults(self):
+        super(Transformer, self).setup_defaults()
         self.conf_default("mean_file", None)
         self.conf_default("offset", None)
 

@@ -4,7 +4,7 @@ from scipy.ndimage import zoom
 
 db_file = "./data/nyu_depth_v2_labeled.mat"
 db_file_2 = "./data/nyu_depth_v1_labeled.mat"
-target_file = "./data/nyu_depth_combined.hdf5"
+target_file = "./data/nyu_depth_unet.hdf5"
 
 
 # Read the MAT-File into memory
@@ -21,8 +21,8 @@ images = np.swapaxes(images, 2, 3)
 depths = np.swapaxes(depths, 1, 2)
 
 # Resizing
-img_scale = 0.6
-depth_scale = 0.15
+img_scale = 1.0
+depth_scale = 0.5752212389
 
 images_sized = np.zeros((images.shape[0], images.shape[1], int(images.shape[2]*img_scale), int(images.shape[3]*img_scale)), dtype=np.uint8)
 depths_sized = np.zeros((depths.shape[0], int(depths.shape[1]*depth_scale), int(depths.shape[2]*depth_scale)), dtype=np.float32)
@@ -55,8 +55,8 @@ images = np.swapaxes(images, 2, 3)
 depths = np.swapaxes(depths, 1, 2)
 
 # Resizing
-img_scale = 0.6
-depth_scale = 0.15
+img_scale = 1.0
+depth_scale = 0.5752212389
 
 images_sized = np.zeros((images.shape[0], images.shape[1], int(images.shape[2]*img_scale), int(images.shape[3]*img_scale)), dtype=np.uint8)
 depths_sized = np.zeros((depths.shape[0], int(depths.shape[1]*depth_scale), int(depths.shape[2]*depth_scale)), dtype=np.float32)
