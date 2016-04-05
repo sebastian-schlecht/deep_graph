@@ -91,7 +91,7 @@ class Graph(object):
         :param batch_size: Int (Optional)
         :return: None
         """
-        log("Setting up graph", LOG_LEVEL_INFO)
+        log("Graph - Setting up graph", LOG_LEVEL_INFO)
         #########################################
         # Pre-init weights for all nodes in case a dump has been loaded
         #########################################
@@ -165,7 +165,7 @@ class Graph(object):
         #########################################
         # Either compile the data within this function if it has been provided or simply provide placeholders for it
         #########################################
-        log("Invoking Theano compiler", LOG_LEVEL_INFO)
+        log("Graph - Invoking Theano compiler", LOG_LEVEL_INFO)
         if phase is PHASE_ALL or phase is PHASE_TRAIN:
             if train_inputs is not None:
                 if batch_size is None:
@@ -272,9 +272,9 @@ class Graph(object):
         try:
             with open(filename, "wb") as f:
                 pkl_utils.dump(data_store, f)
-                log("Model file saved as: %s" % filename, LOG_LEVEL_INFO)
+                log("Graph - Model file saved as: %s" % filename, LOG_LEVEL_INFO)
         except IOError:
-            log("Saving failed with error", LOG_LEVEL_ERROR)
+            log("Graph - Saving failed with error", LOG_LEVEL_ERROR)
             return False
         return True
 
@@ -288,12 +288,12 @@ class Graph(object):
             with open(filename, "rb") as f:
                 self.data_store = pkl_utils.load(f)
                 self.init_weights = True
-                log("Fine-tuning from file '%s'" % filename, LOG_LEVEL_INFO)
+                log("Graph - Loading parameters from file '%s'" % filename, LOG_LEVEL_INFO)
                 if self.is_compiled:
-                    log("Compilation has already taken place. Loaded weights won't "
+                    log("Graph - Compilation has already taken place. Loaded weights won't "
                         "have any effect until the graph is recompiled", LOG_LEVEL_WARNING)
         else:
-            log("Model not found: '%s" % filename, LOG_LEVEL_WARNING)
+            log("Graph - Model not found: '%s" % filename, LOG_LEVEL_WARNING)
 
     def infer(self, arguments):
         """
