@@ -94,3 +94,21 @@ def exposure_transformer(img, level):
             new_color = tuple(truncate(factor * (c-128) + 128) for c in color)
             img.putpixel((x, y), new_color)
     return np.array(img).transpose((2,0,1))
+
+
+def batch_pad_mirror(tensor, border):
+    assert tensor.shape[2] > border
+    assert tensor.shape[3] > border
+    # Copy core
+    replica = np.zeros((tensor.shape[0], tensor.shape[1], tensor.shape[2] + 2*border, tensor.shape[3] + 2*border))
+    replica[:, :, border:border + tensor.shape[2], border:border + tensor.shape[3]] = tensor.copy()
+    # Mirror top
+    replica[:,:,0:border,border:border+tensor.shape[3]] = tensor[:,:,0:border,:][:,:,::-1,:]
+    # Bottom
+    replica[:, :, tensor.shape[2]+border:, border:border+tensor.shape[3]] = tensor[:, :, tensor.shape[2]-border:, :][:, :, ::-1, :]
+    # Left. Use itself for mirroring
+    replica[:, :, :, 0:border] = replica[:, :, :, border:2*border][:, :, :, ::-1]
+    # Right
+    replica[:, :, :, tensor.shape[3]+border:tensor.shape[3]+2*border] = \
+        replica[:, :, :, tensor.shape[3]:tensor.shape[3]+border][:, :, :, ::-1]
+    return replica

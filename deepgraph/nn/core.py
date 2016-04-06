@@ -296,21 +296,62 @@ class Concatenate(Node):
     def alloc(self):
         if len(self.inputs) != 2:
             raise AssertionError("Concat nodes need exactly two nodes.")
-        for s in range(len(self.inputs[0].shape)):
-            if (self.inputs[0].shape[s] != self.inputs[1].shape[s]) and s != self.conf("axis"):
+        for s in range(len(self.inputs[0].output_shape)):
+            if (self.inputs[0].output_shape[s] != self.inputs[1].output_shape[s]) and s != self.conf("axis"):
                 raise AssertionError("Inputs have to be of the same dimension except for the axis to concatenate along.")
         # Compute new shape
-        c_dim = self.inputs[0].shape[self.conf("axis")] + self.inputs[1].shape[self.conf("axis")]
+        c_dim = self.inputs[0].output_shape[self.conf("axis")] + self.inputs[1].output_shape[self.conf("axis")]
         # Tuples are immutable, make an array instead and transform into a tuple afterwards
-        new_shape = [s for s in self.inputs[0].shape]
+        new_shape = [s for s in self.inputs[0].output_shape]
         new_shape[self.conf("axis")] = c_dim
-        self.output_shape = (s for s in new_shape)
+        self.output_shape = tuple(new_shape)
 
     def forward(self):
         in_0 = self.inputs[0].expression
         in_1 = self.inputs[1].expression
 
         self.expression = T.concatenate([in_0, in_1], axis=self.conf("axis"))
+
+
+class Crop(Node):
+    """
+    Crop input along the last two axis. Used when cropping feature maps
+    """
+    def __init__(self, graph, name, config={}):
+        """
+        Constructor
+        :param graph: Graph
+        :param name: String
+        :param config: Dicts
+        :return: Node
+        """
+        super(Crop, self).__init__(graph, name, config=config)
+
+    def setup_defaults(self):
+        super(Crop, self).setup_defaults()
+        self.conf_default("height",None)
+        self.conf_default("width", None)
+        self.conf_default("strategy", "center")
+
+    def alloc(self):
+        if self.conf("height") is None or self.conf("width") is None:
+            raise AssertionError("Configuration height and width are mandatory for Crop nodes.")
+        if len(self.inputs) != 1:
+            raise AssertionError("Crop nodes can only have one input.")
+        in_shape = self.inputs[0].output_shape
+        if self.conf("height") > in_shape[2] or self.conf("height") > in_shape[3]:
+            raise AssertionError("Runtime shape mismatch. Crop height/width is too small.")
+
+        self.output_shape = (in_shape[0], in_shape[1], self.conf("height"), self.conf("width"))
+
+    def forward(self):
+        if self.conf("strategy") is "center":
+            in_ = self.inputs[0].expression
+            cy = (in_.shape[2] - self.conf("height")) / 2
+            cx = (in_.shape[3] - self.conf("width")) / 2
+            self.expression = in_[:, :, cy:cy+self.conf("height"), cx:cx+self.conf("width")]
+        else:
+            raise NotImplementedError()
 
 
 class MSE(Node):

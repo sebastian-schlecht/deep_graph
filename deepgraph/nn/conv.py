@@ -165,6 +165,7 @@ class Pool(Node):
             self.conf("stride"),
             self.conf("padding")
         )
+        self.output_shape = tuple(self.output_shape)
 
     def forward(self):
         _in = self.inputs[0].expression

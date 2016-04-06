@@ -6,7 +6,7 @@ from deepgraph.nn.conv import *
 from deepgraph.nn.loss import *
 from deepgraph.solver import *
 
-from deepgraph.pipeline import Optimizer, H5DBLoader, Pipeline, Transformer
+from deepgraph.pipeline import Optimizer, H5DBLoader, Pipeline, MirrorTransformer
 
 
 def build_graph():
@@ -134,8 +134,8 @@ def build_u_graph():
     """
     Inputs
     """
-    data = Data(graph, "data", T.ftensor4, shape=(-1, 3, 452, 452))
-    label = Data(graph, "label", T.ftensor3, shape=(-1, 1, 260, 260), config={
+    data = Data(graph, "data", T.ftensor4, shape=(-1, 3, 572, 572))
+    label = Data(graph, "label", T.ftensor3, shape=(-1, 1, 388, 388), config={
         "phase": PHASE_TRAIN
     })
     """
@@ -283,7 +283,6 @@ def build_u_graph():
             "weight_filler": normal(0, 0.014)
         }
     )
-    # TODO Insert concat
     conv_12 = Conv2D(
         graph,
         "conv_12",
@@ -319,7 +318,6 @@ def build_u_graph():
             "weight_filler": normal(0, 0.0208)
         }
     )
-    # TODO Insert concat
     conv_15 = Conv2D(
         graph,
         "conv_15",
@@ -415,20 +413,45 @@ def build_u_graph():
             "weight_filler": normal(0, 0.058)
         }
     )
+
     """
-    fl = Flatten(graph, "flatten", config={
-        "dims": 2
+    Feed forward nodes
+    """
+    crop_2 = Crop(graph, "crop_2", config={
+        "width": 392,
+        "height": 392
     })
 
-    fc_1 = Dense(graph, "fc_1", config={
-        "out": 4800,
-        "activation": None
+    concat_20 = Concatenate(graph, "concat_20", config={
+        "axis": 1
     })
-    rs = Reshape(graph, "reshape_0", config={
-        "shape": (-1, 1, 60, 80),
-        "is_output": True
+
+    crop_4 = Crop(graph, "crop_4", config={
+        "width": 200,
+        "height": 200
     })
-    """
+
+    concat_17 = Concatenate(graph, "concat_17", config={
+        "axis": 1
+    })
+
+    crop_6 = Crop(graph, "crop_6", config={
+        "width": 104,
+        "height": 104
+    })
+
+    concat_14 = Concatenate(graph, "concat_14", config={
+        "axis": 1
+    })
+
+    crop_8 = Crop(graph, "crop_8", config={
+        "width": 56,
+        "height": 56
+    })
+
+    concat_11 = Concatenate(graph, "concat_11", config={
+        "axis": 1
+    })
 
 
     """
@@ -448,33 +471,45 @@ def build_u_graph():
     """
     data.connect(conv_1)
     conv_1.connect(conv_2)
+    conv_2.connect(crop_2)
+    crop_2.connect(concat_20)
     conv_2.connect(pool_2)
     pool_2.connect(conv_3)
     conv_3.connect(conv_4)
+    conv_4.connect(crop_4)
+    crop_4.connect(concat_17)
     conv_4.connect(pool_4)
     pool_4.connect(conv_5)
     conv_5.connect(conv_6)
+    conv_6.connect(crop_6)
+    crop_6.connect(concat_14)
     conv_6.connect(pool_6)
     pool_6.connect(conv_7)
     conv_7.connect(conv_8)
+    conv_8.connect(crop_8)
+    crop_8.connect(concat_11)
     conv_8.connect(pool_8)
     pool_8.connect(conv_9)
     conv_9.connect(conv_10)
     conv_10.connect(up_11)
     up_11.connect(conv_11)
-    conv_11.connect(conv_12)
+    conv_11.connect(concat_11)
+    concat_11.connect(conv_12)
     conv_12.connect(conv_13)
     conv_13.connect(up_14)
     up_14.connect(conv_14)
-    conv_14.connect(conv_15)
+    conv_14.connect(concat_14)
+    concat_14.connect(conv_15)
     conv_15.connect(conv_16)
     conv_16.connect(up_17)
     up_17.connect(conv_17)
-    conv_17.connect(conv_18)
+    conv_17.connect(concat_17)
+    concat_17.connect(conv_18)
     conv_18.connect(conv_19)
     conv_19.connect(up_20)
     up_20.connect(conv_20)
-    conv_20.connect(conv_21)
+    conv_20.connect(concat_20)
+    concat_20.connect(conv_21)
     conv_21.connect(conv_22)
     conv_22.connect(conv_23)
 
@@ -492,27 +527,25 @@ def build_u_graph():
     return graph
 
 
-
-
 if __name__ == "__main__":
 
     batch_size = 4
     chunk_size = 10*batch_size
-    transfer_shape = ((chunk_size, 3, 452, 452), (chunk_size, 260, 260))
+    transfer_shape = ((chunk_size, 3, 572, 572), (chunk_size, 388, 388))
 
     g = build_u_graph()
 
     # Build the training pipeline
     db_loader = H5DBLoader("db", ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)), config={
         # "db": '/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_sampled.hdf5',
-        "db": 'data/nyu_depth_unet.hdf5',
+        "db": 'data/nyu_depth_unet_large.hdf5',
         "key_data": "images",
         "key_label": "depths",
         "chunk_size": chunk_size
     })
-    transformer = Transformer("tr", transfer_shape, config={
+    transformer = MirrorTransformer("tr", transfer_shape, config={
         # Measured empirically for the data-set
-        "offset": 2.7321029
+        # "offset": 2.7321029
     })
     optimizer = Optimizer("opt", g, transfer_shape, config={
         "batch_size":  batch_size,

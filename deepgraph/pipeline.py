@@ -8,6 +8,7 @@ import h5py
 
 from deepgraph.utils.logging import log
 from deepgraph.utils.common import batch_parallel, ConfigMixin, shuffle_in_unison_inplace, pickle_dump
+from deepgraph.utils.image import batch_pad_mirror
 from deepgraph.constants import *
 from deepgraph.conf import rng
 from deepgraph.nn.core import Dropout
@@ -536,3 +537,99 @@ class Transformer(Processor):
         self.conf_default("offset", None)
 
 
+class MirrorTransformer(Processor):
+    """
+    Apply online random augmentation.
+    """
+    def __init__(self, name, shapes, config, buffer_size=10):
+        super(MirrorTransformer, self).__init__(name, shapes, config, buffer_size)
+        self.mean = None
+
+    def init(self):
+        if self.conf("mean_file") is not None:
+            self.mean = np.load(self.conf("mean_file"))
+        else:
+            log("Transformer - No mean file specified.", LOG_LEVEL_WARNING)
+
+    def process(self):
+        packet = self.pull()
+        # Return if no data is there
+        if not packet:
+            return False
+        # Unpack
+        data, label = packet.data
+        # Do processing
+        log("Transformer - Processing data", LOG_LEVEL_VERBOSE)
+        i_h = 572
+        i_w = 572
+
+        d_h = 388
+        d_w = 388
+
+        border = 184/2
+
+        start = time.time()
+        # Mean
+        if packet.phase == PHASE_TRAIN or packet.phase == PHASE_VAL:
+            data = data.astype(np.float32)
+            if self.mean is not None:
+                for idx in range(data.shape[0]):
+                    # Subtract mean
+                    data[idx] = data[idx] - self.mean.astype(np.float32)
+            if self.conf("offset") is not None:
+                label -= self.conf("offset")
+
+            # Pad mirror
+            pad = batch_pad_mirror(data, border).astype(np.float32)
+
+        if packet.phase == PHASE_TRAIN:
+            # Random crops
+            cy = rng.randint(data.shape[2] - d_h, size=1)
+            cx = rng.randint(data.shape[3] - d_w, size=1)
+            # data = data[:, :, cy:cy+i_h, cx:cx+i_w]
+
+            # Compute corner of the expanded image patch
+            data = pad[:, :, cy:cy+i_h, cx:cx+i_w]
+
+            # Project image crop corner onto depth scales
+            # cy = int(float(cy) * (float(d_h)/float(i_h)))
+            # cx = int(float(cx) * (float(d_w)/float(i_w)))
+            label = label[:, cy:cy+d_h, cx:cx+d_w]
+
+            # Do elementwise operations
+            for idx in range(data.shape[0]):
+                # Flip with probability 0.5
+                p = rng.randint(2)
+                if p > 0:
+                    data[idx] = data[idx, :, :, ::-1]
+                    label[idx] = label[idx, :, ::-1]
+                # RGB we mult with a random value between 0.8 and 1.2
+                r = rng.randint(80,121) / 100.
+                g = rng.randint(80,121) / 100.
+                b = rng.randint(80,121) / 100.
+                data[idx, 0] = data[idx, 0] * r
+                data[idx, 1] = data[idx, 1] * g
+                data[idx, 2] = data[idx, 2] * b
+
+            # Shuffle
+            data, label = shuffle_in_unison_inplace(data, label)
+        elif packet.phase == PHASE_VAL:
+            # Center crop
+            cy = (data.shape[2] - i_h) // 2
+            cx = (data.shape[3] - i_w) // 2
+            data = data[:, :, cy:cy+i_h, cx:cx+i_w]
+
+            # Project image crop corner onto depth scales
+            cy = int(float(cy) * (float(d_h)/float(i_h)))
+            cx = int(float(cx) * (float(d_w)/float(i_w)))
+            label = label[:, cy:cy+d_h, cx:cx+d_w]
+        end = time.time()
+        log("Transformer - Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
+        # Try to push into queue as long as thread should not terminate
+        self.push(Packet(identifier=packet.id, phase=packet.phase, num=2, data=(data, label)))
+        return True
+
+    def setup_defaults(self):
+        super(MirrorTransformer, self).setup_defaults()
+        self.conf_default("mean_file", None)
+        self.conf_default("offset", None)
