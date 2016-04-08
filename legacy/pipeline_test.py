@@ -373,6 +373,7 @@ def build_u_graph():
         }
     )
     up_20 = Upsample(graph, "up_20", config={
+        "mode": "constant",
         "kernel": (2, 2)
     })
     conv_20 = Conv2D(graph, "conv_20", config={

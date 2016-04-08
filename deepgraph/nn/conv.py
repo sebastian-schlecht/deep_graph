@@ -3,6 +3,7 @@ import theano.tensor as T
 from theano.tensor.nnet import conv2d
 from theano.tensor.nnet.abstract_conv import get_conv_output_shape
 from theano.tensor.signal.pool import Pool as TPool, pool_2d
+from theano.tensor.nnet.abstract_conv import bilinear_upsampling
 
 from deepgraph.graph import Node
 from deepgraph.nn.init import (normal, constant)
@@ -43,7 +44,7 @@ class Conv2D(Node):
     def alloc(self):
         # Compute filter shapes and image shapes
         if len(self.inputs) != 1:
-            raise AssertionError("Conv nodes only support one input.")
+            raise AssertionError("Conv nodes only support one input: %s." % self.name)
         in_shape = self.inputs[0].output_shape
         self.image_shape = in_shape
         self.filter_shape = (
@@ -103,8 +104,9 @@ class Conv2D(Node):
 
         # Build final expression
         if self.conf("activation") is None:
-            raise AssertionError("Conv/Pool nodes need an activation function.")
-        self.expression = self.conf("activation")(conv_out)
+            self.expression = conv_out
+        else:
+            self.expression = self.conf("activation")(conv_out)
 
 
 class Upsample(Node):
@@ -117,6 +119,8 @@ class Upsample(Node):
     def setup_defaults(self):
         super(Upsample, self).setup_defaults()
         self.conf_default("kernel", (2, 2))
+        self.conf_default("ratio", 2)
+        self.conf_default("mode", "constant")
 
     def alloc(self):
         if len(self.inputs) > 1:
@@ -130,7 +134,10 @@ class Upsample(Node):
 
     def forward(self):
         _in = self.inputs[0].expression
-        self.expression = _in.repeat(self.conf("kernel")[0], axis=2).repeat(self.conf("kernel")[1], axis=3)
+        if self.conf("mode") is "constant":
+            self.expression = _in.repeat(self.conf("kernel")[0], axis=2).repeat(self.conf("kernel")[1], axis=3)
+        else:
+            self.expression = bilinear_upsampling(input=_in, ratio=self.conf("ratio"))
 
 
 class Pool(Node):

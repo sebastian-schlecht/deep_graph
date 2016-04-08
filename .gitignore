@@ -8,4 +8,5 @@ build
 DeepGraph.egg-info
 .ipynb_checkpoints/
 */.DS_Store
-DS_Store
+.DS_Store
+*/.ipynb_checkpoints

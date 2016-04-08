@@ -379,6 +379,7 @@ class Node(ConfigMixin):
                     i.init()
             # Call setup
             self.alloc()
+            log("Node - %s has shape %s" % (self.name, str(self.output_shape)), LOG_LEVEL_INFO)
             self.forward()
             self.is_init = True
 

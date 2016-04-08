@@ -295,7 +295,7 @@ class Concatenate(Node):
 
     def alloc(self):
         if len(self.inputs) != 2:
-            raise AssertionError("Concat nodes need exactly two nodes.")
+            raise AssertionError("Concat nodes need exactly two input nodes.")
         for s in range(len(self.inputs[0].output_shape)):
             if (self.inputs[0].output_shape[s] != self.inputs[1].output_shape[s]) and s != self.conf("axis"):
                 raise AssertionError("Inputs have to be of the same dimension except for the axis to concatenate along.")
