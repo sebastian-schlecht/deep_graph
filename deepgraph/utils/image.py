@@ -4,6 +4,7 @@ from skimage import exposure
 from skimage import transform
 from PIL import Image
 import numpy as np
+import math
 
 def imscale(img, scale):
     """
@@ -57,6 +58,7 @@ def flip_transformer_s(image, direction):
     else:
         return image[::-1, :]
 
+
 def flip_transformer_rgb(image, direction):
     """
     Flit a RGB image alongside an axis
@@ -68,6 +70,36 @@ def flip_transformer_rgb(image, direction):
         return image[:, :, ::-1]
     else:
         return image[:, ::-1, :]
+
+
+def rotate_transformer_scalar_float32(array, angle, normalize=100.):
+    """
+    Rotate a scalar float image by angle degrees. Normalize is used to force the values in -1,1 range for rotate to work
+    Fill empty areas with a 0
+    :param array: Arraylike
+    :param angle: Float
+    :param normalize: Float
+    :return: Arraylike
+    """
+    array = array.copy()
+    array /= normalize
+    array = transform.rotate(array, angle)
+    array *= normalize
+    return array
+
+
+def rotate_transformer_rgb_uint8(array, angle):
+    """
+    Rotate an RGB image by angle degrees
+    Fill empty areas with 0
+    :param array: Arraylike
+    :param angle: Float
+    :return: Arraylike
+    """
+    array = array.copy()
+    array = transform.rotate(array.transpose((1, 2, 0)), angle)
+    array *= 255.
+    return array.astype(np.uint8).transpose((2, 0, 1))
 
 
 def exposure_transformer(img, level):
