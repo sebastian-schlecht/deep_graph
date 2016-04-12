@@ -54,3 +54,21 @@ def constant(value=1, dtype=theano.config.floatX):
         arr.fill(value)
         return arr
     return gen
+
+def xavier(gain=1.0, dtype=theano.config.floatX):
+    """
+    Xavier init according to http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf
+    """
+    if gain == "relu":
+        gain = np.sqrt(2)
+    def gen(size):
+        if len(size) < 2:
+            raise AssertionError("This initializer only works with shapes of length >= 2")
+
+        n1, n2 = size[:2]
+        receptive_field_size = np.prod(size[2:])
+
+        std = gain * np.sqrt(2.0 / ((n1 + n2) * receptive_field_size))
+        return np.asarray(rng.normal(0, std, size=size), dtype=dtype)
+        
+    return gen

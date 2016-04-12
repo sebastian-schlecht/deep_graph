@@ -111,17 +111,22 @@ class ConfigMixin(object):
                     log("Key '%s' has no default value. Is the spelling correct?" % key, LOG_LEVEL_WARNING)
                 self.__config__[key] = config[key]
 
-    def conf(self, key):
+    def conf(self, key, value=None):
         """
         Get the configuration value
         :param key: String
         :return:
         """
-        if key in self.__config__:
-            return self.__config__[key]
+        if value == None:
+            if key in self.__config__:
+                return self.__config__[key]
+            else:
+                log("Accessing non standard configuration property", LOG_LEVEL_WARNING)
+                return None
         else:
-            log("Accessing non standard configuration property", LOG_LEVEL_WARNING)
-            return None
+            if key not in self.__config__:
+                log("Accessing non standard configuration property", LOG_LEVEL_WARNING)
+            self.__config__[key] = value
 
     def conf_default(self, key, value):
         """
