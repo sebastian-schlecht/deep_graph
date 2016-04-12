@@ -1,12 +1,16 @@
 import theano
 import theano.tensor as T
+from theano import config
 from theano.tensor.nnet import conv2d
 from theano.tensor.nnet.abstract_conv import get_conv_output_shape
 from theano.tensor.signal.pool import Pool as TPool, pool_2d
 from theano.tensor.nnet.abstract_conv import bilinear_upsampling
+from theano.sandbox.cuda import dnn
 
 from deepgraph.graph import Node
 from deepgraph.nn.init import (normal, constant)
+from deepgraph.utils.logging import log
+from deepgraph.constants import *
 
 __docformat__ = 'restructedtext en'
 
@@ -40,6 +44,7 @@ class Conv2D(Node):
         self.conf_default("activation", T.tanh)
         self.conf_default("weight_filler", normal())
         self.conf_default("bias_filler", constant(1))
+        self.conf_default("use_cudnn", config.dnn.enabled)
 
     def alloc(self):
         # Compute filter shapes and image shapes
@@ -84,24 +89,31 @@ class Conv2D(Node):
             raise AssertionError("ConvPool layer can only have one input")
 
         # Use optimization in case the number of samples is constant during compilation
-        if self.image_shape[0] != -1:
-            conv_out = conv2d(
-                input=self.inputs[0].expression,
-                input_shape=self.image_shape,
-                filters=self.W,
-                filter_shape=self.filter_shape,
-                border_mode=self.conf("border_mode"),
-                subsample=self.conf("subsample")
-            ) + self.b.dimshuffle('x', 0, 'x', 'x')
+        if not self.conf("use_cudnn"):
+            if self.image_shape[0] != -1:
+                conv_out = conv2d(
+                    input=self.inputs[0].expression,
+                    input_shape=self.image_shape,
+                    filters=self.W,
+                    filter_shape=self.filter_shape,
+                    border_mode=self.conf("border_mode"),
+                    subsample=self.conf("subsample")
+                ) + self.b.dimshuffle('x', 0, 'x', 'x')
+            else:
+                conv_out = conv2d(
+                    input=self.inputs[0].expression,
+                    filters=self.W,
+                    filter_shape=self.filter_shape,
+                    border_mode=self.conf("border_mode"),
+                    subsample=self.conf("subsample")
+                ) + self.b.dimshuffle('x', 0, 'x', 'x')
         else:
-            conv_out = conv2d(
-                input=self.inputs[0].expression,
-                filters=self.W,
-                filter_shape=self.filter_shape,
-                border_mode=self.conf("border_mode"),
-                subsample=self.conf("subsample")
-            ) + self.b.dimshuffle('x', 0, 'x', 'x')
-
+            log("Conv2D - Using DNN CUDA Module", LOG_LEVEL_INFO)
+            conv_out = dnn.dnn_conv(img=self.inputs[0].expression,
+                                    kerns=self.W,
+                                    subsample=self.conf("subsample"),
+                                    border_mode=self.conf("border_mode"),
+                                    ) + self.b.dimshuffle('x', 0, 'x', 'x')
         # Build final expression
         if self.conf("activation") is None:
             self.expression = conv_out
@@ -153,7 +165,8 @@ class Pool(Node):
         self.conf_default("ignore_border", True)
         self.conf_default("stride", None)
         self.conf_default("padding", (0, 0))
-        self.conf_default("mode", "max")
+        self.conf_default("mode", "max"),
+        self.conf_default("use_cudnn", config.dnn.enabled)
 
     def alloc(self):
         if len(self.inputs) > 1:
@@ -176,14 +189,23 @@ class Pool(Node):
 
     def forward(self):
         _in = self.inputs[0].expression
-        self.expression = pool_2d(
-            _in,
-            self.conf("kernel"),
-            self.conf("ignore_border"),
-            self.conf("stride"),
-            self.conf("padding"),
-            self.conf("mode")
-        )
+        if not self.conf("use_cudnn"):
+            self.expression = pool_2d(
+                _in,
+                self.conf("kernel"),
+                self.conf("ignore_border"),
+                self.conf("stride"),
+                self.conf("padding"),
+                self.conf("mode")
+            )
+        else:
+            log("Pool - Using DNN CUDA Module", LOG_LEVEL_INFO)
+            self.expression = dnn.dnn_pool(_in,
+                                           ws=self.conf("kernel"),
+                                           stride=self.conf("stride"),
+                                           mode=self.conf("mode"),
+                                           pad=self.conf("padding")
+                                           )
 
 
 class LRN(Node):

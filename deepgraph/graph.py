@@ -9,6 +9,7 @@ import theano.misc.pkl_utils as pkl_utils
 from deepgraph.constants import *
 from deepgraph.utils.logging import *
 from deepgraph.utils.common import ConfigMixin
+from deepgraph.nn.core import Dropout
 
 __docformat__ = 'restructedtext en'
 
@@ -305,6 +306,8 @@ class Graph(object):
             raise AssertionError("Cannot infer until the model is compiled")
         # Make sure there is something in memory
         assert self.models[INFER] is not None
+        # Disable dropouts
+        Dropout.set_dp_off()
         # Call
         return self.models[INFER](*arguments)
 

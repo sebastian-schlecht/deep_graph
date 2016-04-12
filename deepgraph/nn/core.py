@@ -209,21 +209,14 @@ class Flatten(Node):
 
 class Dense(Node):
     """
-    Implements a single fully connected node. Activations can be specified in the constructor
+    Implements a single fully connected node.
     """
     def __init__(self, graph, name, config={}):
         """
         Constructor
         :param graph: Graph
         :param name: String
-        :param n_in: Int
-        :param n_out: Int
-        :param activation: theano.Elemwise
-        :param W: theano.shared
-        :param b: theano.shared
-        :param lr: Float
-        :param is_output: Bool
-        :param phase: Int
+        :param config: Dict
         :return: Node
         """
         super(Dense, self).__init__(graph, name, config=config)
