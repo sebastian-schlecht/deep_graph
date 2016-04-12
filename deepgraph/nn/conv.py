@@ -200,11 +200,13 @@ class Pool(Node):
             )
         else:
             log("Pool - Using DNN CUDA Module", LOG_LEVEL_INFO)
+            pad = self.conf("padding") if self.conf("padding") is not None else (0,0)
+            stride = self.conf("stride") if self.conf("stride") is not None else self.conf("kernel")
             self.expression = dnn.dnn_pool(_in,
                                            ws=self.conf("kernel"),
-                                           stride=self.conf("stride"),
+                                           stride=stride,
                                            mode=self.conf("mode"),
-                                           pad=self.conf("padding")
+                                           pad=pad
                                            )
 
 

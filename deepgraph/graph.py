@@ -9,7 +9,7 @@ import theano.misc.pkl_utils as pkl_utils
 from deepgraph.constants import *
 from deepgraph.utils.logging import *
 from deepgraph.utils.common import ConfigMixin
-from deepgraph.nn.core import Dropout
+# from deepgraph.nn.core import Dropout
 
 __docformat__ = 'restructedtext en'
 
