@@ -84,7 +84,7 @@ class Pipeline(ConfigMixin):
                         break
                 except Queue.Full:
                     time.sleep(Processor.SPIN_WAIT_TIME)
-                    pass
+                    continue
             except KeyboardInterrupt:
                 self.stop()
                 raise
@@ -144,8 +144,8 @@ class Processor(threading.Thread, ConfigMixin):
     That guarantees that data is passing forward only after all stages have been through their init phase.
     Each processor has an entry queue where other parts of the pipeline can put data in
     """
-    SPIN_WAIT_TIME = 0.5    # Wait time in case process block has not done any work
-    QUEUE_FULL_OR_EMPTY_TIMEOUT = 1     # Timeout after which stop states are checked
+    SPIN_WAIT_TIME = 2    # Wait time in case process block has not done any work
+    QUEUE_FULL_OR_EMPTY_TIMEOUT = 4     # Timeout after which stop states are checked
 
     def __init__(self, group=None, target=None, name=None,
                  args=(), kwargs=None, verbose=None):
@@ -182,7 +182,8 @@ class Processor(threading.Thread, ConfigMixin):
                 res = self.process()
                 if not res:
                     time.sleep(Processor.SPIN_WAIT_TIME)
-        except:
+        except Exception, e:
+            print log("Exception occured in thread " + self.name + ": " + str(e), LOG_LEVEL_ERROR)
             self.pipeline.signal(Pipeline.SIG_ABORT)
             raise
 
@@ -215,7 +216,8 @@ class Processor(threading.Thread, ConfigMixin):
                 has_data = True
                 break
             except Queue.Empty:
-                pass
+                time.sleep(Processor.SPIN_WAIT_TIME)
+                break
         # Return if no data is there
         if not has_data:
             return None
@@ -233,7 +235,8 @@ class Processor(threading.Thread, ConfigMixin):
                 break
             except Queue.Full:
                 # In case the queue is empty, return false, wait for spin and check if we have to abort
-                pass
+                time.sleep(Processor.SPIN_WAIT_TIME)
+                continue
 
     def setup_defaults(self):
         pass
