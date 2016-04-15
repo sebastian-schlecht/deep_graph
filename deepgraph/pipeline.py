@@ -56,6 +56,7 @@ class Pipeline(ConfigMixin):
         :return: None
         """
         for proc in self.processors:
+            proc.daemon = True
             proc.start()
         # Keep track of the number of cycles executed
         idx = 0
@@ -68,19 +69,23 @@ class Pipeline(ConfigMixin):
         log("Pipeline - Starting computation", LOG_LEVEL_INFO)
         while not self.stop_evt.is_set():
             try:
-                proc.q.put(Packet(identifier=idx, phase=PHASE_TRAIN, num=2, data=None), block=True)
-                idx += 1
-                if (idx % self.conf("validation_frequency")) == 0:
-                    proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True)
-                if idx >= self.conf("cycles"):
-                    break
+                try:
+                    proc.q.put(Packet(identifier=idx, phase=PHASE_TRAIN, num=2, data=None), block=True)
+                    idx += 1
+                    if (idx % self.conf("validation_frequency")) == 0:
+                        proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True)
+                    if idx >= self.conf("cycles"):
+                        log("Pipeline - All commands have been dispatched", LOG_LEVEL_INFO)
+                        proc.q.put(Packet(identifier=idx, phase=PHASE_END, num=2, data=None), block=True)
+                        break
+                except Queue.Full:
+                        time.sleep(Processor.SPIN_WAIT_TIME)
+                        continue
             except (KeyboardInterrupt, SystemExit):
                 self.stop()
                 raise
 
-        log("Pipeline - All commands have been dispatched", LOG_LEVEL_INFO)
-        proc.q.put(Packet(identifier=idx, phase=PHASE_END, num=2, data=None), block=True)
-
+        
     def stop(self):
         """
         Stop running processors by signaling their stop events
@@ -174,7 +179,8 @@ class Processor(threading.Thread, ConfigMixin):
                 res = self.process()
                 if not res:
                     time.sleep(Processor.SPIN_WAIT_TIME)
-        except:
+        except Exception, e:
+            print log("Exception occured in thread " + self.name + ": " + str(e), LOG_LEVEL_ERROR)
             self.pipeline.signal(Pipeline.SIG_ABORT)
             raise
 
@@ -207,7 +213,7 @@ class Processor(threading.Thread, ConfigMixin):
                 has_data = True
                 break
             except Queue.Empty:
-                pass
+                continue
         # Return if no data is there
         if not has_data:
             return None
@@ -225,7 +231,7 @@ class Processor(threading.Thread, ConfigMixin):
                 break
             except Queue.Full:
                 # In case the queue is empty, return false, wait for spin and check if we have to abort
-                pass
+                continue
 
     def setup_defaults(self):
         pass
@@ -248,12 +254,14 @@ class H5DBLoader(Processor):
         Open a handle to the database and check if the config is valid and files exist
         :return:
         """
+        log("H5DBLoader - Caching DB in memory", LOG_LEVEL_INFO)
         assert self.conf("db") is not None
         self.db_handle = h5py.File(self.conf("db"))
-        self.data_field = self.db_handle[self.conf("key_data")]
-        self.label_field = self.db_handle[self.conf("key_label")]
+        self.data_field = np.array(self.db_handle[self.conf("key_data")])
+        self.label_field = np.array(self.db_handle[self.conf("key_label")])
         assert self.data_field.shape[0] == self.label_field.shape[0]
         self.thresh = int(self.conf("split_value") * self.data_field.shape[0])
+        self.db_handle.close()
 
     def process(self):
         """
@@ -280,9 +288,8 @@ class H5DBLoader(Processor):
 
             # Load entire validation data for now (one val cycle)
             elif packet.phase == PHASE_VAL:
-                upper = self.data_field.shape[0]
-                data = self.data_field[self.thresh:upper]
-                label = self.label_field[self.thresh:upper]
+                data = self.data_field[self.thresh:]
+                label = self.label_field[self.thresh:]
             # End phase or unknown
             else:
                 data, label = (None, None)
@@ -364,8 +371,10 @@ class Optimizer(Processor):
         if not packet:
             return False
         # Train phase
+        
         if packet.phase == PHASE_TRAIN:
             train_x, train_y = packet.data
+            
             start = time.time()
             assert (train_x.shape[1:] == self.shapes[0][1:]) and (train_y.shape[1:] == self.shapes[1][1:])
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.conf("chunk_size")):
@@ -452,92 +461,3 @@ class Optimizer(Processor):
         self.conf_default("weights", None)
         self.conf_default("save_prefix", "model")
         self.conf_default("lr_policy", "constant")
-
-
-class Transformer(Processor):
-    """
-    Apply online random augmentation.
-    """
-    def __init__(self, name, shapes, config, buffer_size=10):
-        super(Transformer, self).__init__(name, shapes, config, buffer_size)
-        self.mean = None
-
-    def init(self):
-        if self.conf("mean_file") is not None:
-            self.mean = np.load(self.conf("mean_file"))
-        else:
-            log("Transformer - No mean file specified.", LOG_LEVEL_WARNING)
-
-    def process(self):
-        packet = self.pull()
-        # Return if no data is there
-        if not packet:
-            return False
-        # Unpack
-        data, label = packet.data
-        # Do processing
-        log("Transformer - Processing data", LOG_LEVEL_VERBOSE)
-        i_h = 452
-        i_w = 452
-
-        d_h = 260
-        d_w = 260
-        start = time.time()
-        # Mean
-        if packet.phase == PHASE_TRAIN or packet.phase == PHASE_VAL:
-            data = data.astype(np.float32)
-            if self.mean is not None:
-                for idx in range(data.shape[0]):
-                    # Subtract mean
-                    data[idx] = data[idx] - self.mean.astype(np.float32)
-            if self.conf("offset") is not None:
-                label -= self.conf("offset")
-
-        if packet.phase == PHASE_TRAIN:
-            # Random crops
-            cy = rng.randint(data.shape[2] - i_h, size=1)
-            cx = rng.randint(data.shape[3] - i_w, size=1)
-            data = data[:, :, cy:cy+i_h, cx:cx+i_w]
-
-            # Project image crop corner onto depth scales
-            cy = int(float(cy) * (float(d_h)/float(i_h)))
-            cx = int(float(cx) * (float(d_w)/float(i_w)))
-            label = label[:, cy:cy+d_h, cx:cx+d_w]
-
-            # Do elementwise operations
-            for idx in range(data.shape[0]):
-                # Flip with probability 0.5
-                p = rng.randint(2)
-                if p > 0:
-                    data[idx] = data[idx, :, :, ::-1]
-                    label[idx] = label[idx, :, ::-1]
-                # RGB we mult with a random value between 0.8 and 1.2
-                r = rng.randint(80,121) / 100.
-                g = rng.randint(80,121) / 100.
-                b = rng.randint(80,121) / 100.
-                data[idx, 0] = data[idx, 0] * r
-                data[idx, 1] = data[idx, 1] * g
-                data[idx, 2] = data[idx, 2] * b
-
-            # Shuffle
-            data, label = shuffle_in_unison_inplace(data, label)
-        elif packet.phase == PHASE_VAL:
-            # Center crop
-            cy = (data.shape[2] - i_h) // 2
-            cx = (data.shape[3] - i_w) // 2
-            data = data[:, :, cy:cy+i_h, cx:cx+i_w]
-
-            # Project image crop corner onto depth scales
-            cy = int(float(cy) * (float(d_h)/float(i_h)))
-            cx = int(float(cx) * (float(d_w)/float(i_w)))
-            label = label[:, cy:cy+d_h, cx:cx+d_w]
-        end = time.time()
-        log("Transformer - Processing took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
-        # Try to push into queue as long as thread should not terminate
-        self.push(Packet(identifier=packet.id, phase=packet.phase, num=2, data=(data, label)))
-        return True
-
-    def setup_defaults(self):
-        super(Transformer, self).setup_defaults()
-        self.conf_default("mean_file", None)
-        self.conf_default("offset", None)
