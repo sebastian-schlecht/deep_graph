@@ -6,6 +6,10 @@ import theano
 import numpy as np
 import h5py
 
+
+
+
+
 from deepgraph.utils.logging import log
 from deepgraph.utils.common import batch_parallel, ConfigMixin, shuffle_in_unison_inplace, pickle_dump
 from deepgraph.utils.image import batch_pad_mirror
@@ -70,22 +74,22 @@ class Pipeline(ConfigMixin):
         while not self.stop_evt.is_set():
             try:
                 try:
-                    proc.q.put(Packet(identifier=idx, phase=PHASE_TRAIN, num=2, data=None), block=True)
+                    proc.q.put(Packet(identifier=idx, phase=PHASE_TRAIN, num=2, data=None), block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
                     idx += 1
                     if (idx % self.conf("validation_frequency")) == 0:
-                        proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True)
+                        proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True, timeout=Processor.QUEUE_FULL_OR_EMPTY_TIMEOUT)
                     if idx >= self.conf("cycles"):
                         log("Pipeline - All commands have been dispatched", LOG_LEVEL_INFO)
                         proc.q.put(Packet(identifier=idx, phase=PHASE_END, num=2, data=None), block=True)
                         break
                 except Queue.Full:
-                        time.sleep(Processor.SPIN_WAIT_TIME)
-                        continue
-            except (KeyboardInterrupt, SystemExit):
+
+                    time.sleep(Processor.SPIN_WAIT_TIME)
+                    continue
+            except KeyboardInterrupt:
                 self.stop()
                 raise
 
-        
     def stop(self):
         """
         Stop running processors by signaling their stop events
@@ -141,29 +145,29 @@ class Processor(threading.Thread, ConfigMixin):
     That guarantees that data is passing forward only after all stages have been through their init phase.
     Each processor has an entry queue where other parts of the pipeline can put data in
     """
-    SPIN_WAIT_TIME = 0.5    # Wait time in case process block has not done any work
-    QUEUE_FULL_OR_EMPTY_TIMEOUT = 1     # Timeout after which stop states are checked
+    SPIN_WAIT_TIME = 2    # Wait time in case process block has not done any work
+    QUEUE_FULL_OR_EMPTY_TIMEOUT = 4     # Timeout after which stop states are checked
 
-    def __init__(self, name, shapes, config, buffer_size=10):
-        """
-        Constructor
-        :param name: String
-        :param shapes: Tuple of tuples
-        :param config: Dict
-        :param buffer_size: Int
-        :return:
-        """
-        super(Processor, self).__init__(group=None)
-        self.make_configurable(config)
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs=None, verbose=None):
+
+        threading.Thread.__init__(self, group=group, target=target, name=name,
+                                  verbose=verbose)
+
+        if "buffer_size" not in kwargs:
+            kwargs["buffer_size"] = 10
+        self.make_configurable(kwargs["config"])
         self.top = None
         self.bottom = None
-        self.name = name
-        self.shapes = shapes
-        self.q = Queue.Queue(buffer_size)
+        self.name = kwargs["name"]
+        self.shapes = kwargs["shapes"]
+        self.q = Queue.Queue(kwargs["buffer_size"])
         self.ready = threading.Event()
         self.stop = threading.Event()
         self.stop.clear()
         self.pipeline = None
+        self.args = args
+        self.kwargs = kwargs
 
     def run(self):
         """
@@ -213,7 +217,9 @@ class Processor(threading.Thread, ConfigMixin):
                 has_data = True
                 break
             except Queue.Empty:
-                continue
+
+                time.sleep(Processor.SPIN_WAIT_TIME)
+                break
         # Return if no data is there
         if not has_data:
             return None
@@ -231,6 +237,8 @@ class Processor(threading.Thread, ConfigMixin):
                 break
             except Queue.Full:
                 # In case the queue is empty, return false, wait for spin and check if we have to abort
+
+                time.sleep(Processor.SPIN_WAIT_TIME)
                 continue
 
     def setup_defaults(self):
@@ -241,8 +249,9 @@ class H5DBLoader(Processor):
     """
     Processor class to asynchronously load data in chunks and prepare it for later stages
     """
-    def __init__(self, name, shapes, config, buffer_size=10):
-        super(H5DBLoader, self).__init__(name, shapes, config, buffer_size)
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs=None, verbose=None):
+        super(H5DBLoader, self).__init__(group=group, args=args, kwargs=kwargs, target=target, name=name, verbose=verbose)
         self.db_handle = None
         self.cursor = 0
         self.data_field = None
@@ -321,8 +330,11 @@ class Optimizer(Processor):
     After transferring the chunk to the GPU (if available) the optimizer loops through that chunk 10 times. After that,
     the next chunk is taken from the entry queue
     """
-    def __init__(self, name, graph, shapes, config, buffer_size=10):
-        super(Optimizer, self).__init__(name, shapes, config, buffer_size)
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs=None, verbose=None):
+        super(Optimizer, self).__init__(group=group, args=args, kwargs=kwargs, target=target, name=name, verbose=verbose)
+        assert "graph" in kwargs
+        graph = kwargs["graph"]
         assert graph is not None
         self.graph = graph
         # Shared vars
@@ -385,6 +397,8 @@ class Optimizer(Processor):
                 # Iterate through the chunk
                 n_iters = len(chunk_x) // self.conf("batch_size")
                 for minibatch_index in range(n_iters):
+                    if self.stop.is_set():
+                        return True
                     log("Optimizer - Computing gradients", LOG_LEVEL_VERBOSE)
                     Dropout.set_dp_on()
                     self.idx += 1
@@ -461,3 +475,5 @@ class Optimizer(Processor):
         self.conf_default("weights", None)
         self.conf_default("save_prefix", "model")
         self.conf_default("lr_policy", "constant")
+
+
