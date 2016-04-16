@@ -269,7 +269,7 @@ class Graph(object):
         data_store = {}
         for node in self.nodes:
             name = node.name
-            data_store[name] = node.params
+            data_store[name] = node.get_params()
         try:
             with open(filename, "wb") as f:
                 pkl_utils.dump(data_store, f)
@@ -307,7 +307,8 @@ class Graph(object):
         # Make sure there is something in memory
         assert self.models[INFER] is not None
         # Disable dropouts
-        Dropout.set_dp_off()
+        # TODO Reenable this
+        # Dropout.set_dp_off()
         # Call
         return self.models[INFER](*arguments)
 

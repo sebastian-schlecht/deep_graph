@@ -25,9 +25,13 @@ def build_graph():
             "kernel": (11, 11),
             "subsample": (4, 4),
             "use_cudnn": False,
-            "activation": relu
+            "activation": None
         }
     )
+    bn = BN(graph, "bn", config={
+        "nonlinearity": relu,
+        "disable": True
+    })
     pool_0 = Pool(graph, "pool_0", config={
         "kernel": (3, 3),
         "use_cudnn": False,
@@ -116,7 +120,8 @@ def build_graph():
 
     # Connect
     data.connect(conv_0)
-    conv_0.connect(pool_0)
+    conv_0.connect(bn)
+    bn.connect(pool_0)
     pool_0.connect(lrn_0)
     lrn_0.connect(conv_1)
     conv_1.connect(pool_1)
@@ -148,33 +153,33 @@ if __name__ == "__main__":
     g = build_graph()
 
     # Build the training pipeline
-    db_loader = H5DBLoader(kwargs={
-        "name": "db",
-        "shapes": ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)),
-        "config": {
+    db_loader = H5DBLoader(
+        name= "db",
+        shapes= ((chunk_size, 3, 480, 640), (chunk_size, 1, 480, 640)),
+        config= {
             # "db": '/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_sampled.hdf5',
-            "db": '../data/nyu_depth_v2_sampled.hdf5',
+            "db": './data/nyu_depth_v2_sampled.hdf5',
             "key_data": "images",
             "key_label": "depths",
             "chunk_size": chunk_size
-    }
     })
-    optimizer = Optimizer(kwargs={
-        "name": "opt",
-        "graph": g,
-        "shapes": transfer_shape,
-        "config": {
+    optimizer = Optimizer(
+        name= "opt",
+        graph= g,
+        shapes=transfer_shape,
+        config= {
             "batch_size":  batch_size,
             "chunk_size": chunk_size,
+            # "learning_rate": 0.01,
             "learning_rate": 0.01,
             "momentum": 0.95,
             "weight_decay": 0.0005,
             "print_freq": 1,
             "save_freq": 30000,
-            "weights": "data/depth_pipeline_alexnet_test_noaug_iter_60000.zip",
+            "weights": "./data/depth_pipeline_alexnet_test_noaug_iter_60000.zip",
             "save_prefix": "./data/depth_pipeline_alexnet_test_noaug"
         }
-    })
+    )
     p = Pipeline(config={
         "validation_frequency": 50,
         "cycles": 20000

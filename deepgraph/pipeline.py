@@ -66,14 +66,15 @@ class Pipeline(ConfigMixin):
         proc = self.processors[0]
         if proc is None:
             raise AssertionError("At least one processor needed to make a pipeline run.")
-        log("Pipeline - Starting computation", LOG_LEVEL_INFO)
         while not self.stop_evt.is_set():
             try:
                 try:
-                    proc.q.put(Packet(identifier=idx, phase=PHASE_TRAIN, num=2, data=None), block=True)
+                    proc.q.put(Packet(identifier=idx,
+                                      phase=PHASE_TRAIN,
+                                      num=2, data=None), block=True)
                     idx += 1
                     if (idx % self.conf("validation_frequency")) == 0:
-                        proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True)
+                        proc.q.put(Packet(identifier=idx, phase=PHASE_VAL, num=2, data=None), block=True )
                     if idx >= self.conf("cycles"):
                         log("Pipeline - All commands have been dispatched", LOG_LEVEL_INFO)
                         proc.q.put(Packet(identifier=idx, phase=PHASE_END, num=2, data=None), block=True)
@@ -85,7 +86,6 @@ class Pipeline(ConfigMixin):
                 self.stop()
                 raise
 
-        
     def stop(self):
         """
         Stop running processors by signaling their stop events
@@ -180,7 +180,7 @@ class Processor(threading.Thread, ConfigMixin):
                 if not res:
                     time.sleep(Processor.SPIN_WAIT_TIME)
         except Exception, e:
-            print log("Exception occured in thread " + self.name + ": " + str(e), LOG_LEVEL_ERROR)
+            print log("Exception occured in processor '" + self.name + "': " + str(e), LOG_LEVEL_ERROR)
             self.pipeline.signal(Pipeline.SIG_ABORT)
             raise
 
@@ -333,6 +333,8 @@ class Optimizer(Processor):
         self.val_y = None
         # Iteration index
         self.idx = 0
+        # Learning rate
+        self.lr = self.conf("learning_rate")
         # Train losses
         self.losses = []
 
@@ -358,7 +360,10 @@ class Optimizer(Processor):
             batch_size=self.conf("batch_size"),
             phase=PHASE_TRAIN)
         log("Optimizer - Compilation finished", LOG_LEVEL_INFO)
+        # Reset index counter
         self.idx = 0
+        # Reset lr
+        self.lr = self.conf("learning_rate")
 
     def process(self):
         """
@@ -374,7 +379,6 @@ class Optimizer(Processor):
         
         if packet.phase == PHASE_TRAIN:
             train_x, train_y = packet.data
-            
             start = time.time()
             assert (train_x.shape[1:] == self.shapes[0][1:]) and (train_y.shape[1:] == self.shapes[1][1:])
             for chunk_x, chunk_y in batch_parallel(train_x, train_y, self.conf("chunk_size")):
@@ -390,22 +394,29 @@ class Optimizer(Processor):
                     self.idx += 1
                     minibatch_avg_cost = self.graph.models[TRAIN](
                         minibatch_index,
-                        self.conf("learning_rate"),
+                        self.lr,
                         self.conf("momentum"),
                         self.conf("weight_decay")
                     )
+                    # Adapt LR
+                    self._adapt_lr()
                     # Save losses
                     self.losses.append(minibatch_avg_cost)
                     # Print in case the freq is ok
                     if self.idx % self.conf("print_freq") == 0:
                         log("Optimizer - Training score at iteration %i: %s" % (self.idx, str(minibatch_avg_cost)), LOG_LEVEL_INFO)
-                    if self.idx % self.conf("save_freq") == 0:
-                        log("Optimizer - Saving intermediate model state", LOG_LEVEL_INFO)
-                        self.graph.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + ".zip")
-                        # Dump loss too
-                        pickle_dump(self.losses, self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.pkl")
-                        # np_loss = np.array(self.losses)
-                        # np.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.npy", np_loss)
+                    # Check if we have to abort
+                    if self.stop.is_set():
+                        # Make a safety dump of all the weights
+                        log("Optimizer - Optimization stopped early.")
+                        if self.idx > self.conf("min_save_iter"):
+                            self._persist_on_cond(force=True)
+                        # Return because we were forced to stop
+                        return True
+                    else:
+                        # Persist on condition
+                        self._persist_on_cond()
+
             end = time.time()
             log("Optimizer - Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
             # Return true, we don't want to enter spin waits. Just proceed with the next chunk or stop
@@ -446,6 +457,8 @@ class Optimizer(Processor):
             return True
 
         elif packet.phase == PHASE_END:
+            # Always save on the last iteration
+            self._persist_on_cond(force=True)
             self.pipeline.signal(Pipeline.SIG_FINISHED)
             return True
 
@@ -461,3 +474,23 @@ class Optimizer(Processor):
         self.conf_default("weights", None)
         self.conf_default("save_prefix", "model")
         self.conf_default("lr_policy", "constant")
+        self.conf_default("gamma", 0.1)
+        self.conf_default("step_size", 1000)
+        self.conf_default("min_save_iter", 1000)
+
+    def _adapt_lr(self):
+        if self.conf("lr_policy") == "constant":
+            return
+        elif self.conf("lr_policy") == "step":
+            if self.idx % self.conf("step_size") == 0:
+                self.lr += self.conf("gamma")
+            return
+        else:
+            raise AssertionError("Unsupported learning policy")
+
+    def _persist_on_cond(self, force=False):
+        if (self.idx % self.conf("save_freq") == 0) or force:
+            log("Optimizer - Saving intermediate model state", LOG_LEVEL_INFO)
+            self.graph.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + ".zip")
+            # Dump loss too
+            pickle_dump(self.losses, self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.pkl")

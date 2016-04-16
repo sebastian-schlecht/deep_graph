@@ -1,10 +1,10 @@
 import numpy as np
 import theano
 import theano.tensor as T
+from theano.tensor.nnet.bn import batch_normalization
 
 from deepgraph.graph import Node
 from deepgraph.conf import rng
-from deepgraph.constants import *
 from deepgraph.nn.init import normal, constant
 
 __docformat__ = 'restructedtext en'
@@ -464,3 +464,77 @@ class Dropout(Node):
     def set_dp_off():
         for i in range(0, len(Dropout.layers)):
             Dropout.layers[i].flag_on.set_value(0.0)
+
+
+class BN(Node):
+    """
+    Apply batch normalization to the tensor of activations
+    """
+    def __init__(self, graph, name, config={}):
+        super(BN, self).__init__(graph, name, config=config)
+        # Explicitly set the grad flag to false
+        self.computes_gradient = False
+
+        self.axes = None
+        self.shape = None
+        # Learned parameters - Stored for housekeeping
+        self.gamma = None
+        self.beta = None
+
+    def setup_defaults(self):
+        super(BN, self).setup_defaults()
+        self.conf_default("mode", 'low_mem')
+        self.conf_default("disable", False)
+        self.conf_default("axes", "auto")
+        self.conf_default("nonlinearity", None)
+
+    def alloc(self):
+        if len(self.inputs) != 1:
+            raise AssertionError("BN nodes need exactly one input.")
+        input_shape = self.inputs[0].output_shape
+        # Compute shape
+        self.axes = (0,)
+        self.shape = [size for axis, size in enumerate(input_shape) if axis not in self.axes]
+        if self.conf("axes") == 'auto':
+            # default: normalize over all but the second axis
+            self.axes = (0,) + tuple(range(2, len(input_shape)))
+        # Allocate memory for this node
+        if self.gamma is None:
+            self.gamma = theano.shared(value=np.ones(self.shape, dtype=theano.config.floatX), name='gamma')
+        if self.beta is None:
+            self.beta = theano.shared(value=np.zeros(self.shape, dtype=theano.config.floatX), name='beta')
+        self.params = [self.gamma, self.beta]
+
+        # Set shape
+        self.output_shape = input_shape
+
+    def forward(self):
+        input = self.inputs[0].expression
+        # TODO Disable this switch once verified that BN is working
+        if not self.conf("disable"):
+            self.expression = batch_normalization(inputs=input,
+                                                  gamma=self.gamma,
+                                                  beta=self.beta,
+                                                  mean=input.mean(axis=self.axes, keepdims=True),
+                                                  std=input.std(axis=self.axes, keepdims=True)
+                                                  )
+        else:
+            self.expression = input
+
+        if self.conf("nonlinearity") is not None:
+            self.expression = self.conf("nonlinearity")(self.expression)
+
+    def set_params(self, params):
+        """
+        We need to override this function in order to allow BN nodes to be pickled correctly.
+        :param params:
+        :return:
+        """
+        if len(params) == 2:
+            self.gamma = params[0]
+            self.beta = params[1]
+            self.params = [self.gamma, self.beta]
+        elif len(params) == 1:
+            raise AssertionError("Loading only on parameter for file - pickling must have failed.")
+
+
