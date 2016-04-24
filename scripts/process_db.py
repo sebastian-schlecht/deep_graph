@@ -9,7 +9,7 @@ from deepgraph.utils.common import shuffle_in_unison_inplace
 
 db_file = "/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat"
 db_file_2 = "/home/ga29mix/nashome/data/nyu_depth_v1/nyu_depth_data_labeled.mat"
-target_file = "/home/ga29mix/nashome/data/nyu_depth_v2_combined_50"
+target_file = "/home/ga29mix/nashome/data/nyu_depth_combined_vnet2"
 
 
 # Read the MAT-File into memory
@@ -27,8 +27,8 @@ depths = np.swapaxes(depths, 1, 2)
 
 
 # Resizing
-img_scale = 0.5
-depth_scale = 0.5
+img_scale = 0.5375
+depth_scale = 0.5375
 
 images_sized = np.zeros((images.shape[0], images.shape[1], int(images.shape[2]*img_scale), int(images.shape[3]*img_scale)), dtype=np.uint8)
 depths_sized = np.zeros((depths.shape[0], int(depths.shape[1]*depth_scale), int(depths.shape[2]*depth_scale)), dtype=np.float32)
@@ -60,8 +60,8 @@ images = np.swapaxes(images, 2, 3)
 depths = np.swapaxes(depths, 1, 2)
 
 # Resizing
-img_scale = 0.5
-depth_scale = 0.5
+img_scale = 0.5375
+depth_scale = 0.5375
 
 images_sized = np.zeros((images.shape[0], images.shape[1], int(images.shape[2]*img_scale), int(images.shape[3]*img_scale)), dtype=np.uint8)
 depths_sized = np.zeros((depths.shape[0], int(depths.shape[1]*depth_scale), int(depths.shape[2]*depth_scale)), dtype=np.float32)

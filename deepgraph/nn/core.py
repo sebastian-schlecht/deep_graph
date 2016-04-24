@@ -268,7 +268,6 @@ class Dense(Node):
 
 
 class Concatenate(Node):
-    # TODO Make this work for an arbitrary amount of inputs
     """
     Concatenate two tensor along an axis
     """
@@ -287,23 +286,24 @@ class Concatenate(Node):
         self.conf_default("axis", 0)
 
     def alloc(self):
-        if len(self.inputs) != 2:
-            raise AssertionError("Concat nodes need exactly two input nodes.")
+        if len(self.inputs) < 2:
+            raise AssertionError("Concat nodes need more than one input.")
         for s in range(len(self.inputs[0].output_shape)):
-            if (self.inputs[0].output_shape[s] != self.inputs[1].output_shape[s]) and s != self.conf("axis"):
-                raise AssertionError("Inputs have to be of the same dimension except for the axis to concatenate along.")
+            for i in range(1,len(self.inputs)):
+                if (self.inputs[0].output_shape[s] != self.inputs[i].output_shape[s]) and s != self.conf("axis"):
+                    raise AssertionError("Inputs have to be of the same dimension except for the axis to concatenate along.")
         # Compute new shape
-        c_dim = self.inputs[0].output_shape[self.conf("axis")] + self.inputs[1].output_shape[self.conf("axis")]
+        c_dim = 0
+        for i in range(len(self.inputs)):
+            c_dim += self.inputs[i].output_shape[self.conf("axis")]
         # Tuples are immutable, make an array instead and transform into a tuple afterwards
         new_shape = [s for s in self.inputs[0].output_shape]
         new_shape[self.conf("axis")] = c_dim
         self.output_shape = tuple(new_shape)
 
     def forward(self):
-        in_0 = self.inputs[0].expression
-        in_1 = self.inputs[1].expression
-
-        self.expression = T.concatenate([in_0, in_1], axis=self.conf("axis"))
+        expressions = [x.expression for x in self.inputs]
+        self.expression = T.concatenate(expressions, axis=self.conf("axis"))
 
 
 class Crop(Node):

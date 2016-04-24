@@ -307,7 +307,7 @@ class Graph(object):
         # Make sure there is something in memory
         assert self.models[INFER] is not None
         # Disable dropouts
-        # TODO Reenable this
+
         # Dropout.set_dp_off()
         # Call
         return self.models[INFER](*arguments)
