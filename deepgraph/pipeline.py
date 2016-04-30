@@ -278,8 +278,8 @@ class H5DBLoader(Processor):
             if packet.phase == PHASE_TRAIN:
                 c_size = self.conf("chunk_size")
                 upper = min(self.thresh, self.cursor + c_size)
-                data = self.data_field[self.cursor:upper]
-                label = self.label_field[self.cursor:upper]
+                data = self.data_field[self.cursor:upper].copy()
+                label = self.label_field[self.cursor:upper].copy()
 
                 self.cursor += c_size
                 # Reset cursor in case we exceeded the array ranges
@@ -288,8 +288,8 @@ class H5DBLoader(Processor):
 
             # Load entire validation data for now (one val cycle)
             elif packet.phase == PHASE_VAL:
-                data = self.data_field[self.thresh:]
-                label = self.label_field[self.thresh:]
+                data = self.data_field[self.thresh:].copy()
+                label = self.label_field[self.thresh:].copy()
             # End phase or unknown
             else:
                 data, label = (None, None)
@@ -337,6 +337,8 @@ class Optimizer(Processor):
         self.lr = self.conf("learning_rate")
         # Train losses
         self.losses = []
+        # Val losses
+        self.val_losses = []
 
     def init(self):
         """
@@ -452,6 +454,8 @@ class Optimizer(Processor):
                 val = np.array(results[key])
                 results[key] = val.mean()
             end = time.time()
+            # Append to storage
+            self.val_losses.append(results)
             log("Optimizer - Computation took " + str(end - start) + " seconds.", LOG_LEVEL_VERBOSE)
             log("Optimizer - Mean loss values for validation at iteration " + str(self.idx) + " is: " + str(results), LOG_LEVEL_INFO)
             return True
@@ -470,6 +474,7 @@ class Optimizer(Processor):
         self.conf_default("weight_decay", 0.0005)
         self.conf_default("print_freq", 50)
         self.conf_default("save_freq", 10000)
+        self.conf_default("temp_freq", 100)
         self.conf_default("chunk_size", 320)
         self.conf_default("weights", None)
         self.conf_default("save_prefix", "model")
@@ -489,8 +494,15 @@ class Optimizer(Processor):
             raise AssertionError("Unsupported learning policy")
 
     def _persist_on_cond(self, force=False):
+        loss_dict = {}
+        loss_dict["train"] = self.losses
+        loss_dict["val"] = self.val_losses
+        # Temporarily store train / val losses
+        if (self.idx % self.conf("temp_freq") == 0):
+            log("Optimizer - Storing running results", LOG_LEVEL_VERBOSE)
+            pickle_dump(loss_dict, self.conf("save_prefix") + "_tmp_loss.pkl")
         if (self.idx % self.conf("save_freq") == 0) or force:
             log("Optimizer - Saving intermediate model state", LOG_LEVEL_INFO)
             self.graph.save(self.conf("save_prefix") + "_iter_" + str(self.idx) + ".zip")
             # Dump loss too
-            pickle_dump(self.losses, self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.pkl")
+            pickle_dump(loss_dict, self.conf("save_prefix") + "_iter_" + str(self.idx) + "_loss.pkl")

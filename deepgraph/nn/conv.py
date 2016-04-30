@@ -108,7 +108,7 @@ class Conv2D(Node):
                     subsample=self.conf("subsample")
                 ) + self.b.dimshuffle('x', 0, 'x', 'x')
         else:
-            log("Conv2D - Using DNN CUDA Module", LOG_LEVEL_DEV)
+            log("Conv2D - Using DNN CUDA Module", LOG_LEVEL_VERBOSE)
             conv_out = dnn.dnn_conv(img=self.inputs[0].expression,
                                     kerns=self.W,
                                     subsample=self.conf("subsample"),
@@ -199,7 +199,7 @@ class Pool(Node):
                 self.conf("mode")
             )
         else:
-            log("Pool - Using DNN CUDA Module", LOG_LEVEL_DEV)
+            log("Pool - Using DNN CUDA Module", LOG_LEVEL_VERBOSE)
             pad = self.conf("padding") if self.conf("padding") is not None else (0,0)
             stride = self.conf("stride") if self.conf("stride") is not None else self.conf("kernel")
             self.expression = dnn.dnn_pool(_in,
