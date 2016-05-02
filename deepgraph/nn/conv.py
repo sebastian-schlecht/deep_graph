@@ -19,6 +19,8 @@ class Conv2D(Node):
     """
     Combination of convolution and pooling for ConvNets
     """
+    use_cudnn = config.dnn.enabled
+    
     def __init__(self, graph, name, config={}):
         """
         Constructor
@@ -44,7 +46,6 @@ class Conv2D(Node):
         self.conf_default("activation", T.tanh)
         self.conf_default("weight_filler", normal())
         self.conf_default("bias_filler", constant(1))
-        self.conf_default("use_cudnn", config.dnn.enabled)
 
     def alloc(self):
         # Compute filter shapes and image shapes
@@ -89,7 +90,7 @@ class Conv2D(Node):
             raise AssertionError("ConvPool layer can only have one input")
 
         # Use optimization in case the number of samples is constant during compilation
-        if not self.conf("use_cudnn"):
+        if not Conv2D.use_cudnn:
             if self.image_shape[0] != -1:
                 conv_out = conv2d(
                     input=self.inputs[0].expression,
@@ -156,6 +157,8 @@ class Pool(Node):
     """
     Downsample using the Theano pooling module
     """
+    use_cudnn = config.dnn.enabled
+    
     def __init__(self, graph, name, config={}):
         super(Pool, self).__init__(graph, name, config=config)
 
@@ -166,7 +169,6 @@ class Pool(Node):
         self.conf_default("stride", None)
         self.conf_default("padding", (0, 0))
         self.conf_default("mode", "max"),
-        self.conf_default("use_cudnn", config.dnn.enabled)
 
     def alloc(self):
         if len(self.inputs) > 1:
@@ -189,7 +191,7 @@ class Pool(Node):
 
     def forward(self):
         _in = self.inputs[0].expression
-        if not self.conf("use_cudnn"):
+        if not Pool.use_cudnn:
             self.expression = pool_2d(
                 _in,
                 self.conf("kernel"),

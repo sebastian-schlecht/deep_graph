@@ -7,9 +7,9 @@ sys.path.append('..')
 from deepgraph.utils.common import shuffle_in_unison_inplace
 
 
-db_file = "/home/ga29mix/nashome/data/nyu_depth_v2/nyu_depth_v2_labeled.mat"
-db_file_2 = "/home/ga29mix/nashome/data/nyu_depth_v1/nyu_depth_data_labeled.mat"
-target_file = "/home/ga29mix/nashome/data/nyu_depth_combined_vnet2"
+db_file = "/media/data/depth_data/nyu_depth_v2_labeled.mat"
+db_file_2 = "/media/data/depth_data/nyu_depth_data_labeled.mat"
+target_file = "/media/data/depth_data/nyu_depth_combined_vnet2"
 
 
 # Read the MAT-File into memory
