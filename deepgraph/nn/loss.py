@@ -1,6 +1,6 @@
 import theano.tensor as T
 
-from deepgraph.graph import Node
+from deepgraph.node import Node
 from deepgraph.constants import *
 
 __docformat__ = 'restructedtext en'
@@ -11,7 +11,7 @@ class NegativeLogLikelyHoodLoss(Node):
     Compute the negative log likelyhood loss of a given input
     Loss weight specifies to which degree the loss is considered during the update phases
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[],config={}):
         """
         Constructor
         :param graph: Graph
@@ -19,7 +19,7 @@ class NegativeLogLikelyHoodLoss(Node):
         :param config: Dict
         :return: Node
         """
-        super(NegativeLogLikelyHoodLoss, self).__init__(graph, name, config=config)
+        super(NegativeLogLikelyHoodLoss, self).__init__(graph, name, inputs=inputs, config=config)
         self.is_loss = True
 
     def setup_defaults(self):
@@ -47,7 +47,7 @@ class L1RegularizationLoss(Node):
     """
     L1 regularization node for adjacent fc layers
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[],config={}):
         """
         Constructor
         :param graph: Graph
@@ -55,7 +55,7 @@ class L1RegularizationLoss(Node):
         :param config: Dict
         :return: Node
         """
-        super(L1RegularizationLoss, self).__init__(graph, name, config=config)
+        super(L1RegularizationLoss, self).__init__(graph, name, inputs=inputs, config=config)
         self.is_loss = True
 
     def setup_defaults(self):
@@ -79,7 +79,7 @@ class L2RegularizationLoss(Node):
     """
     L1 regularization node for adjacent fc layers
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[],config={}):
         """
         Constructor
         :param graph: Graph
@@ -87,7 +87,7 @@ class L2RegularizationLoss(Node):
         :param config: Dict
         :return: Node
         """
-        super(L2RegularizationLoss, self).__init__(graph, name, config=config)
+        super(L2RegularizationLoss, self).__init__(graph, name, inputs=inputs, config=config)
         self.is_loss = True
 
     def setup_defaults(self):
@@ -111,7 +111,7 @@ class LogarithmicScaleInvariantLoss(Node):
     """
     Compute log scale invariant error for depth prediction
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -119,7 +119,7 @@ class LogarithmicScaleInvariantLoss(Node):
         :param config: Dict
         :return: Node
         """
-        super(LogarithmicScaleInvariantLoss, self).__init__(graph, name, config=config)
+        super(LogarithmicScaleInvariantLoss, self).__init__(graph, name, inputs=inputs,config=config)
         self.is_loss = True
 
     def setup_defaults(self):
@@ -147,7 +147,7 @@ class EuclideanLoss(Node):
     Computes the loss according to the mean euclidean distance of the input tensors
     Equivalent to mean squared error (MSE)
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
             """
             Constructor
             :param graph:  Graph
@@ -155,7 +155,7 @@ class EuclideanLoss(Node):
             :param config: Dict
             :return:
             """
-            super(EuclideanLoss, self).__init__(graph, name, config=config)
+            super(EuclideanLoss, self).__init__(graph, name, inputs=inputs, config=config)
             self.is_loss = True
 
     def setup_defaults(self):

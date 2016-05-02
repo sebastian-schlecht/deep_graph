@@ -3,7 +3,7 @@ import theano
 import theano.tensor as T
 from theano.tensor.nnet.bn import batch_normalization
 
-from deepgraph.graph import Node
+from deepgraph.node import Node
 from deepgraph.conf import rng
 from deepgraph.nn.init import normal, constant
 
@@ -48,7 +48,7 @@ class Reshape(Node):
     """
     Reshapes the previous tensor
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -56,7 +56,7 @@ class Reshape(Node):
         :param config: Dict
         :return: Node
         """
-        super(Reshape, self).__init__(graph, name, config=config)
+        super(Reshape, self).__init__(graph, name, inputs=inputs, config=config)
 
     def setup_defaults(self):
         super(Reshape, self).setup_defaults()
@@ -80,7 +80,7 @@ class Softmax(Node):
     """
     Compute the softmax of the input. n_in and n_out speciy the input/output sizes respectively
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[],config={}):
         """
         Constructor
         :param graph: Graph
@@ -88,7 +88,7 @@ class Softmax(Node):
         :param config: Dict
         :return: Node
         """
-        super(Softmax, self).__init__(graph, name, config=config)
+        super(Softmax, self).__init__(graph, name, inputs=inputs, config=config)
         # Tell the parent graph that we have gradients to compute
         self.computes_gradient = True
 
@@ -138,7 +138,7 @@ class Argmax(Node):
     """
     Computes the argmax of the input. Typically follows a softmax node. Axis specifies the axis to compute the argmax along
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -146,7 +146,7 @@ class Argmax(Node):
         :param config: Dict
         :return: Node
         """
-        super(Argmax, self).__init__(graph, name, config=config)
+        super(Argmax, self).__init__(graph, name, inputs=inputs, config=config)
 
     def setup_defaults(self):
         super(Argmax, self).setup_defaults()
@@ -171,7 +171,7 @@ class Flatten(Node):
     """
     Flatten the input into a tensor with dimensions = dims
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -180,7 +180,7 @@ class Flatten(Node):
         :param is_output: Bool
         :return: Node
         """
-        super(Flatten, self).__init__(graph, name, config=config)
+        super(Flatten, self).__init__(graph, name, inputs=inputs, config=config)
 
     def setup_defaults(self):
         super(Flatten, self).setup_defaults()
@@ -211,7 +211,7 @@ class Dense(Node):
     """
     Implements a single fully connected node.
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[],config={}):
         """
         Constructor
         :param graph: Graph
@@ -219,7 +219,7 @@ class Dense(Node):
         :param config: Dict
         :return: Node
         """
-        super(Dense, self).__init__(graph, name, config=config)
+        super(Dense, self).__init__(graph, name, inputs=inputs, config=config)
         # Mandatory to be able to collect gradients
         self.computes_gradient = True
 
@@ -271,7 +271,7 @@ class Concatenate(Node):
     """
     Concatenate two tensor along an axis
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -279,7 +279,7 @@ class Concatenate(Node):
         :param config: config
         :return:
         """
-        super(Concatenate, self).__init__(graph, name, config=config)
+        super(Concatenate, self).__init__(graph, name, inputs=inputs, config=config)
 
     def setup_defaults(self):
         super(Concatenate, self).setup_defaults()
@@ -310,7 +310,7 @@ class Crop(Node):
     """
     Crop input along the last two axis. Used when cropping feature maps
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -318,7 +318,7 @@ class Crop(Node):
         :param config: Dicts
         :return: Node
         """
-        super(Crop, self).__init__(graph, name, config=config)
+        super(Crop, self).__init__(graph, name, inputs=inputs, config=config)
 
     def setup_defaults(self):
         super(Crop, self).setup_defaults()
@@ -351,7 +351,7 @@ class MSE(Node):
     """
     Compute the MSE for regression tasks
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -359,7 +359,7 @@ class MSE(Node):
         :param config: Dict
         :return:
         """
-        super(MSE, self).__init__(graph, name, config=config)
+        super(MSE, self).__init__(graph, name, inputs=inputs ,config=config)
         self.is_error = True
 
     def setup_defaults(self):
@@ -384,7 +384,7 @@ class Error(Node):
     """
     Computes the mean error for classification tasks
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -392,7 +392,7 @@ class Error(Node):
         :param is_output: Bool
         :return:
         """
-        super(Error, self).__init__(graph, name, config=config)
+        super(Error, self).__init__(graph, name, inputs=inputs, config=config)
         self.is_error = True
 
     def alloc(self):
@@ -423,12 +423,14 @@ class Error(Node):
 
 
 class Dropout(Node):
-
+    """
+    Dropout node implementing stochastic dropout function.
+    """
     # Statically keep track of dropout layers like a registry
     layers = []
 
-    def __init__(self, graph, name, config={}):
-        super(Dropout, self).__init__(graph, name, config=config)
+    def __init__(self, graph, name, inputs=[], config={}):
+        super(Dropout, self).__init__(graph, name, inputs=inputs, config=config)
         self.prob_drop = self.conf("prob")
         self.prob_keep = 1.0 - self.conf("prob")
         self.flag_on = theano.shared(np.cast[theano.config.floatX](1.0))
@@ -470,8 +472,8 @@ class BN(Node):
     """
     Apply batch normalization to the tensor of activations
     """
-    def __init__(self, graph, name, config={}):
-        super(BN, self).__init__(graph, name, config=config)
+    def __init__(self, graph, name, inputs=[],config={}):
+        super(BN, self).__init__(graph, name, inputs=inputs, config=config)
         # Explicitly set the grad flag to false
         self.computes_gradient = False
 
@@ -538,3 +540,36 @@ class BN(Node):
             raise AssertionError("Loading only on parameter for file - pickling must have failed.")
 
 
+class Function(Node):
+    """
+    Define an arbitrary function inside the computational graph
+    """
+    def __init__(self, graph, name, inputs=[], config={}):
+        super(Function, self).__init__(graph, name, inputs=inputs, config=config)
+
+        # Explicitly set the grad flag to false
+        self.computes_gradient = False
+
+    def setup_defaults(self):
+        super(Function, self).setup_defaults()
+        self.conf_default("expression", None)
+        self.conf_default("output_shape", None)
+
+    def alloc(self):
+        if len(self.inputs) != 1:
+            raise AssertionError("BN nodes need exactly one input.")
+        input_shape = self.inputs[0].output_shape
+        if self.conf("output_shape") is None:
+            self.output_shape = input_shape
+        else:
+            self.output_shape = self.conf("output_shape")
+
+    def forward(self):
+        inp = self.inputs[0].expression
+        lambda_func = self.conf("expression")
+        if lambda_func is None:
+            raise AssertionError("Function Nodes need to have the 'expression' config set!")
+        else:
+            if not hasattr(lambda_func, '__call__'):
+                raise AssertionError("'expression' config parameter has to be callable!")
+            self.expression = lambda_func(inp)
