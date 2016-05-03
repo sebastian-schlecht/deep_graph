@@ -488,7 +488,7 @@ class Optimizer(Processor):
             return
         elif self.conf("lr_policy") == "step":
             if self.idx % self.conf("step_size") == 0:
-                self.lr += self.conf("gamma")
+                self.lr *= self.conf("gamma")
             return
         else:
             raise AssertionError("Unsupported learning policy")
