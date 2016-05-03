@@ -410,7 +410,7 @@ class Optimizer(Processor):
                     # Check if we have to abort
                     if self.stop.is_set():
                         # Make a safety dump of all the weights
-                        log("Optimizer - Optimization stopped early.")
+                        log("Optimizer - Optimization stopped early.", LOG_LEVEL_INFO)
                         if self.idx > self.conf("min_save_iter"):
                             self._persist_on_cond(force=True)
                         # Return because we were forced to stop

@@ -24,7 +24,6 @@ def build_graph():
             "channels": 96,
             "kernel": (11, 11),
             "subsample": (4, 4),
-            "use_cudnn": False,
             "activation": None
         }
     )
@@ -34,7 +33,6 @@ def build_graph():
     })
     pool_0 = Pool(graph, "pool_0", config={
         "kernel": (3, 3),
-        "use_cudnn": False,
         "stride": (2, 2)
     })
     lrn_0           = LRN(graph, "lrn_0")
@@ -46,12 +44,10 @@ def build_graph():
             "kernel": (5, 5),
             "border_mode": 2,
             "activation": relu,
-            "use_cudnn": False
         }
     )
     pool_1 = Pool(graph, "pool_1", config={
         "kernel": (3, 3),
-        "use_cudnn": False,
         "stride": (2, 2)
     })
     lrn_1           = LRN(graph, "lrn_1")
@@ -61,7 +57,6 @@ def build_graph():
         config={
             "channels": 384,
             "kernel": (3, 3),
-            "use_cudnn": False,
             "border_mode": 1,
             "activation": relu
         }
@@ -73,7 +68,6 @@ def build_graph():
             "channels": 384,
             "kernel": (3, 3),
             "border_mode": 1,
-            "use_cudnn": False,
             "activation": relu
         }
      )
@@ -83,14 +77,12 @@ def build_graph():
         config={
             "channels": 256,
             "kernel": (3, 3),
-            "use_cudnn": False,
             "border_mode": 1,
             "activation": relu
         }
     )
     pool_4 = Pool(graph, "pool_4", config={
         "kernel": (3, 3),
-        "use_cudnn": False,
         "stride": (2, 2)
     })
     flatten         = Flatten(graph, "flatten", config={

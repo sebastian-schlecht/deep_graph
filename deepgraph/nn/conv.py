@@ -7,7 +7,7 @@ from theano.tensor.signal.pool import Pool as TPool, pool_2d
 from theano.tensor.nnet.abstract_conv import bilinear_upsampling
 from theano.sandbox.cuda import dnn
 
-from deepgraph.graph import Node
+from deepgraph.node import Node
 from deepgraph.nn.init import (normal, constant)
 from deepgraph.utils.logging import log
 from deepgraph.constants import *
@@ -19,9 +19,9 @@ class Conv2D(Node):
     """
     Combination of convolution and pooling for ConvNets
     """
-    use_cudnn = config.dnn.enabled
+    use_cudnn = False
     
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[],config={}):
         """
         Constructor
         :param graph: Graph
@@ -29,7 +29,7 @@ class Conv2D(Node):
         :param config: Dict
         :return: Node
         """
-        super(Conv2D, self).__init__(graph, name, config=config)
+        super(Conv2D, self).__init__(graph, name, inputs=inputs, config=config)
         # Tell the parent graph that we have gradients to compute
         self.computes_gradient = True
 
@@ -126,8 +126,8 @@ class Upsample(Node):
     """
     Upsample the input tensor along axis 2 and 3. The previous node has to provide 4D output
     """
-    def __init__(self, graph, name, config={}):
-        super(Upsample, self).__init__(graph, name, config=config)
+    def __init__(self, graph, name, inputs=[], config={}):
+        super(Upsample, self).__init__(graph, name, inputs=inputs, config=config)
 
     def setup_defaults(self):
         super(Upsample, self).setup_defaults()
@@ -157,10 +157,10 @@ class Pool(Node):
     """
     Downsample using the Theano pooling module
     """
-    use_cudnn = config.dnn.enabled
+    use_cudnn = False
     
-    def __init__(self, graph, name, config={}):
-        super(Pool, self).__init__(graph, name, config=config)
+    def __init__(self, graph, name, inputs=[], config={}):
+        super(Pool, self).__init__(graph, name, inputs=inputs, config=config)
 
     def setup_defaults(self):
         super(Pool, self).setup_defaults()
@@ -219,7 +219,7 @@ class LRN(Node):
     Original implementation from PyLearn 2.
     See https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/expr/normalize.py for details
     """
-    def __init__(self, graph, name, config={}):
+    def __init__(self, graph, name, inputs=[], config={}):
         """
         Constructor
         :param graph: Graph
@@ -227,7 +227,7 @@ class LRN(Node):
         :param config: Dict
         :return: Node
         """
-        super(LRN, self).__init__(graph, name, config=config)
+        super(LRN, self).__init__(graph, name, inputs=inputs, config=config)
         if self.conf("n") % 2 == 0:
             raise NotImplementedError("Only works with odd n for now.")
 
