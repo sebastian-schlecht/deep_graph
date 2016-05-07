@@ -557,7 +557,7 @@ class Function(Node):
 
     def alloc(self):
         if len(self.inputs) != 1:
-            raise AssertionError("BN nodes need exactly one input.")
+            raise AssertionError("Function nodes need exactly one input.")
         input_shape = self.inputs[0].output_shape
         if self.conf("output_shape") is None:
             self.output_shape = input_shape

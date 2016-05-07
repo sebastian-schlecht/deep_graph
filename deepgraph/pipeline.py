@@ -378,7 +378,6 @@ class Optimizer(Processor):
         if not packet:
             return False
         # Train phase
-        
         if packet.phase == PHASE_TRAIN:
             train_x, train_y = packet.data
             start = time.time()
@@ -400,6 +399,7 @@ class Optimizer(Processor):
                         self.conf("momentum"),
                         self.conf("weight_decay")
                     )
+                    
                     # Adapt LR
                     self._adapt_lr()
                     # Save losses
@@ -482,8 +482,21 @@ class Optimizer(Processor):
         self.conf_default("gamma", 0.1)
         self.conf_default("step_size", 1000)
         self.conf_default("min_save_iter", 1000)
+        self.conf_default("warmup", False)
+        self.conf_default("warmup_gamma", 0.1)
+        self.conf_default("warmup_step_size", 1000)
 
     def _adapt_lr(self):
+        # Warmup - Start
+        if self.conf("warmup") and self.conf("lr_policy") == "step":
+            assert(self.conf("warmup_step_size") < self.conf("step_size"))
+        if self.idx == 0 and self.conf("warmup"):     
+            self.lr *= self.conf("warmup_gamma")
+        # Warmup - End
+        elif self.idx == self.conf("warmup_step_size") and self.conf("warmup"):
+            self.lr /= self.conf("warmup_gamma")
+        
+        # Standard policies
         if self.conf("lr_policy") == "constant":
             return
         elif self.conf("lr_policy") == "step":
