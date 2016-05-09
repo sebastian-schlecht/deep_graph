@@ -390,6 +390,9 @@ class Optimizer(Processor):
                 # Iterate through the chunk
                 n_iters = len(chunk_x) // self.conf("batch_size")
                 for minibatch_index in range(n_iters):
+                    # Adapt LR
+                    self._adapt_lr()
+                    
                     log("Optimizer - Computing gradients", LOG_LEVEL_VERBOSE)
                     Dropout.set_dp_on()
                     self.idx += 1
@@ -399,9 +402,6 @@ class Optimizer(Processor):
                         self.conf("momentum"),
                         self.conf("weight_decay")
                     )
-                    
-                    # Adapt LR
-                    self._adapt_lr()
                     # Save losses
                     self.losses.append(minibatch_avg_cost)
                     # Print in case the freq is ok
@@ -490,10 +490,12 @@ class Optimizer(Processor):
         # Warmup - Start
         if self.conf("warmup") and self.conf("lr_policy") == "step":
             assert(self.conf("warmup_step_size") < self.conf("step_size"))
-        if self.idx == 0 and self.conf("warmup"):     
+        if self.idx == 0 and self.conf("warmup"):
+            log("Optimizer - Warmup starting. Changing LR", LOG_LEVEL_INFO)
             self.lr *= self.conf("warmup_gamma")
         # Warmup - End
         elif self.idx == self.conf("warmup_step_size") and self.conf("warmup"):
+            log("Optimizer - Warmup finished. Changing back LR", LOG_LEVEL_INFO)
             self.lr /= self.conf("warmup_gamma")
         
         # Standard policies
