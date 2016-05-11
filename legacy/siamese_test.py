@@ -44,7 +44,7 @@ def build_graph():
     })
     lrn_0 = LRN(g, "lrn_0", inputs=[pool_0])
     """
-    Weight sharing between conv_10 and conv_11. This doesn't make to much sense to add results up in the end but it's fine for 
+    Weight sharing between conv_10 and conv_11. This doesn't make too much sense to add results up in the end but it's fine for 
     testing purposes
     """
     conv_10 = Conv2D(g, "conv_10", inputs=[lrn_0], config={
@@ -108,7 +108,7 @@ solver.optimize(4)
 solver.learning_rate = 0.01
 solver.optimize(4)
 
-# Do some inference on MNIST Test data
+# Do some inference on MNIST train data
 log("Testing inference", LOG_LEVEL_INFO)
 ct = 40
 for idx in range(ct):
