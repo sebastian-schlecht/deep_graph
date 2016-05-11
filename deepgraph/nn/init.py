@@ -69,6 +69,9 @@ def xavier(gain=1.0, dtype=theano.config.floatX):
     if gain == "relu":
         gain = np.sqrt(2)
 
+    elif gain == "sigmoid":
+        gain = 4.0
+
     def gen(size, name):
         if len(size) < 2:
             raise AssertionError("This initializer only works with shapes of length >= 2")

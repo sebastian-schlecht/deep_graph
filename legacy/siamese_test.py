@@ -46,8 +46,18 @@ conv_1 = Conv2D(g, "conv_2", inputs=[lrn_0], config={
     "weight_filler": xavier(gain="relu"),
     "bias_filler": constant(0)
 })
-bn_1 = BN(g, "bn_1", inputs=[conv_1])
-pool_1 = Pool(g, "pool_1", inputs=[conv_1], config={
+conv_11 = Conv2D(g, "conv_21", inputs=[lrn_0], config={
+    "channels": 50,
+    "kernel": (5, 5),
+    "activation": relu,
+    "weight_filler": shared(conv_1, "W"),
+    "bias_filler": constant(0)
+})
+add_1 = Elemwise(g, "elemwise", inputs=[conv_1, conv_11], config={
+    "op": "add"
+})
+bn_1 = BN(g, "bn_1", inputs=[add_1])
+pool_1 = Pool(g, "pool_1", inputs=[bn_1], config={
     "kernel": (2, 2)
 })
 lrn_1 = LRN(g, "lrn_1", inputs=[pool_1])

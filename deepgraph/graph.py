@@ -143,7 +143,19 @@ class Graph(object):
             else:
                 self.cost += weight * exp
             idx += 1
+        #########################################
+        # Remove duplicates in param list
+        #########################################
 
+        new_params = []
+        for i in params:
+            if i not in new_params:
+                new_params.append(i)
+        params = new_params
+
+        #########################################
+        # Collect updates
+        #########################################
         updates = self.sgd(params, learning_rates)
         #########################################
         # Collect inputs

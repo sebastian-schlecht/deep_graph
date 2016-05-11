@@ -112,11 +112,11 @@ class Softmax(Node):
         n_in = in_shape[1]
         # Init weights
         if self.W is None:
-            self.W = self.conf("weight_filler")(size=(n_in, self.conf("out")), name='W')
+            self.W = self.conf("weight_filler")(size=(n_in, self.conf("out")), name='W_' + self.name)
 
         if self.b is None:
             # Init bias
-            self.b = self.conf("bias_filler")(size=self.conf("out"), name="b")
+            self.b = self.conf("bias_filler")(size=self.conf("out"), name="b_" + self.name)
 
         # These are the params to be updated
         self.params = [self.W, self.b]
@@ -236,10 +236,10 @@ class Dense(Node):
 
         if self.W is None:
             # Alloc mem for the weights
-            self.W = self.conf("weight_filler")(size=(n_in, self.conf("out")), name="W")
+            self.W = self.conf("weight_filler")(size=(n_in, self.conf("out")), name="W_" + self.name)
         # Bias
         if self.b is None:
-            self.b = self.conf("bias_filler")(size=self.conf("out"), name='b')
+            self.b = self.conf("bias_filler")(size=self.conf("out"), name='b_' + self.name)
         # Parameters which should be updated during steps
         self.params = [self.W, self.b]
         # Out shape
@@ -557,13 +557,13 @@ class Elemwise(Node):
         out = in_0
         for in_i in self.inputs[1:]:
             if self.conf("op") == "add":
-                out += in_i
+                out += in_i.expression
             elif self.conf("op") == "mul":
-                out *= in_i
+                out *= in_i.expression
             elif self.conf("op") == "sub":
-                out -= in_i
+                out -= in_i.expression
             elif self.conf("op") == "div":
-                out /= in_i
+                out /= in_i.expression
             else:
                 raise AssertionError("Config param '%s' is not supported by Elemwise node %s." % (self.conf("op"), self.name))
         # Assign output exp

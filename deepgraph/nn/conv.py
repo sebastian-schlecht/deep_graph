@@ -65,10 +65,10 @@ class Conv2D(Node):
         # "num output feature maps * filter height * filter width" /
         #   pooling size
         if self.W is None:
-            self.W = self.conf("weight_filler")(size=self.filter_shape, name='W_conv')
+            self.W = self.conf("weight_filler")(size=self.filter_shape, name='W_' + self.name)
 
         if self.b is None:
-            self.b = self.conf("bias_filler")(size=self.filter_shape[0], name='b_conv')
+            self.b = self.conf("bias_filler")(size=self.filter_shape[0], name='b_' + self.name)
         # These are the params to be updated
         self.params = [self.W, self.b]
         ##############
