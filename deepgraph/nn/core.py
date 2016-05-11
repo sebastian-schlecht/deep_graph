@@ -3,13 +3,14 @@ import theano
 import theano.tensor as T
 from theano.tensor.nnet.bn import batch_normalization
 
-from deepgraph.node import Node
+from deepgraph.node import Node, register_node
 from deepgraph.conf import rng
 from deepgraph.nn.init import normal, constant
 
 __docformat__ = 'restructedtext en'
 
 
+@register_node
 class Data(Node):
     """
     Create a node which holds a variable to feed in data to the compute graph.
@@ -43,7 +44,7 @@ class Data(Node):
         # Input should be a Theano variable
         self.expression = self.input.reshape(self.shape)
 
-
+@register_node
 class Reshape(Node):
     """
     Reshapes the previous tensor
@@ -75,7 +76,7 @@ class Reshape(Node):
         in_ = self.inputs[0].expression
         self.expression = in_.reshape(self.conf("shape"))
 
-
+@register_node
 class Softmax(Node):
     """
     Compute the softmax of the input. n_in and n_out speciy the input/output sizes respectively
@@ -111,18 +112,12 @@ class Softmax(Node):
         n_in = in_shape[1]
         # Init weights
         if self.W is None:
-            self.W = theano.shared(
-                value=self.conf("weight_filler")((n_in, self.conf("out"))),
-                name='W',
-                borrow=True
-            )
+            self.W = self.conf("weight_filler")(size=(n_in, self.conf("out")), name='W')
+
         if self.b is None:
             # Init bias
-            self.b = theano.shared(
-                value=self.conf("bias_filler")(self.conf("out")),
-                name='b',
-                borrow=True
-            )
+            self.b = self.conf("bias_filler")(size=self.conf("out"), name="b")
+
         # These are the params to be updated
         self.params = [self.W, self.b]
         # Remember to compute the output shape
@@ -133,7 +128,7 @@ class Softmax(Node):
         # Since inputs holds an array of nodes, we use their expression attribute to compute the symbolic expression
         self.expression = T.nnet.softmax(T.dot(self.inputs[0].expression, self.W) + self.b)
 
-
+@register_node
 class Argmax(Node):
     """
     Computes the argmax of the input. Typically follows a softmax node. Axis specifies the axis to compute the argmax along
@@ -166,7 +161,7 @@ class Argmax(Node):
         # Since inputs holds an array of nodes, we use their expression attribute to compute the symbolic expression
         self.expression = T.argmax(self.inputs[0].expression, axis=self.conf("axis"), keepdims=self.conf("keepdims"))
 
-
+@register_node
 class Flatten(Node):
     """
     Flatten the input into a tensor with dimensions = dims
@@ -206,7 +201,7 @@ class Flatten(Node):
         # Since inputs holds an array of nodes, we use their expression attribute to compute the symbolic expression
         self.expression = self.inputs[0].expression.flatten(self.conf("dims"))
 
-
+@register_node
 class Dense(Node):
     """
     Implements a single fully connected node.
@@ -241,17 +236,10 @@ class Dense(Node):
 
         if self.W is None:
             # Alloc mem for the weights
-            W_values = self.conf("weight_filler")((n_in, self.conf("out")))
-            if self.conf("activation") == theano.tensor.nnet.sigmoid:
-                W_values *= 4
-            W = theano.shared(value=W_values, name='W', borrow=True)
-            # Weights
-            self.W = W
+            self.W = self.conf("weight_filler")(size=(n_in, self.conf("out")), name="W")
         # Bias
         if self.b is None:
-            b_values = self.conf("bias_filler")(self.conf("out"))
-            b = theano.shared(value=b_values, name='b', borrow=True)
-            self.b = b
+            self.b = self.conf("bias_filler")(size=self.conf("out"), name='b')
         # Parameters which should be updated during steps
         self.params = [self.W, self.b]
         # Out shape
@@ -266,7 +254,7 @@ class Dense(Node):
             else self.conf("activation")(lin_output)
         )
 
-
+@register_node
 class Concatenate(Node):
     """
     Concatenate two tensor along an axis
@@ -305,7 +293,7 @@ class Concatenate(Node):
         expressions = [x.expression for x in self.inputs]
         self.expression = T.concatenate(expressions, axis=self.conf("axis"))
 
-
+@register_node
 class Crop(Node):
     """
     Crop input along the last two axis. Used when cropping feature maps
@@ -346,7 +334,7 @@ class Crop(Node):
         else:
             raise NotImplementedError()
 
-
+@register_node
 class MSE(Node):
     """
     Compute the MSE for regression tasks
@@ -379,7 +367,7 @@ class MSE(Node):
         if self.conf("root"):
             self.expression = T.sqrt(self.expression)
 
-
+@register_node
 class Error(Node):
     """
     Computes the mean error for classification tasks
@@ -421,7 +409,7 @@ class Error(Node):
         else:
             raise NotImplementedError()
 
-
+@register_node
 class Dropout(Node):
     """
     Dropout node implementing stochastic dropout function.
@@ -467,7 +455,7 @@ class Dropout(Node):
         for i in range(0, len(Dropout.layers)):
             Dropout.layers[i].flag_on.set_value(0.0)
 
-
+@register_node
 class BN(Node):
     """
     Apply batch normalization to the tensor of activations
@@ -539,7 +527,50 @@ class BN(Node):
         elif len(params) == 1:
             raise AssertionError("Loading only on parameter for file - pickling must have failed.")
 
+@register_node
+class Elemwise(Node):
+    """
+    Elementwise operations on the inputs
+    """
+    def __init__(self, graph, name, inputs=[], config={}):
+        super(Elemwise, self).__init__(graph, name, inputs=inputs, config=config)
 
+    def setup_defaults(self):
+        super(Elemwise, self).setup_defaults()
+        self.conf_default("op", "add")
+
+    def alloc(self):
+        if len(self.inputs) < 2:
+            raise AssertionError("Elemwise nodes need two inputs minimum.")
+
+        in_shape = self.inputs[0].output_shape
+        for i in range(1, len(self.inputs)):
+            cur_shape = self.inputs[i].output_shape
+            if in_shape != cur_shape:
+                raise AssertionError("Shape of all inputs have to be the same for Elemwise nodes. Current shape: " + str(cur_shape) + " - Original shape: " + str(in_shape) + " - Node " + self.name)
+
+        # Assign own output shape
+        self.output_shape = in_shape
+
+    def forward(self):
+        in_0 = self.inputs[0].expression
+        out = in_0
+        for in_i in self.inputs[1:]:
+            if self.conf("op") == "add":
+                out += in_i
+            elif self.conf("op") == "mul":
+                out *= in_i
+            elif self.conf("op") == "sub":
+                out -= in_i
+            elif self.conf("op") == "div":
+                out /= in_i
+            else:
+                raise AssertionError("Config param '%s' is not supported by Elemwise node %s." % (self.conf("op"), self.name))
+        # Assign output exp
+        self.expression = out
+
+
+@register_node
 class Function(Node):
     """
     Define an arbitrary function inside the computational graph

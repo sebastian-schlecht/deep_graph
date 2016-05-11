@@ -63,7 +63,7 @@ class Solver(object):
 
                 if VAL in self.models:
                     if idx % val_freq == 0:
-                        val_losses = np.array([self.models[VAL](i) for i in range(self.graph.n_val_batches)])
+                        val_losses = np.array([self.models[VAL](i)["loss"] for i in range(self.graph.n_val_batches)])
                         log("Validation score at iteration %i: %s" % (idx, str(np.mean(val_losses, axis=0))), LOG_LEVEL_INFO)
 
 

@@ -5,6 +5,22 @@ from deepgraph.utils.common import ConfigMixin
 __docformat__ = 'restructedtext en'
 
 
+__registry__ = {}
+
+
+def register_node(cls):
+    """
+    Decorator to register class nodes in the global registry
+    :param cls: Class
+    :return:
+    """
+    name = cls.__name__
+    if name in __registry__:
+        raise AssertionError("Duplicated node names are not allowed: %s" % name)
+    __registry__[name] = cls
+    return cls
+
+
 class Node(ConfigMixin):
     """
     Generic node class. Implements the new config object pattern
@@ -67,7 +83,7 @@ class Node(ConfigMixin):
         # Connect oneself to input nodes, if specified any
         if len(inputs) > 0:
             for in_node in inputs:
-                self.connect(in_node)
+                in_node.connect(self)
 
     def init(self):
         """
@@ -82,9 +98,11 @@ class Node(ConfigMixin):
             # Call setup
             self.alloc()
             if self.output_shape is None:
-                raise AssertionError("Node %s has not set an output shape. Make sure to assign self.output_shape in alloc()" % self.name)
+                raise AssertionError("Node %s has not set an output shape. Make sure to assign self.output_shape in alloc() - " % self.name)
             log("Node - %s has shape %s" % (self.name, str(self.output_shape)), LOG_LEVEL_INFO)
             self.forward()
+            if self.expression is None:
+                raise AssertionError("Node %s has not set forward function. Make sure to assign self.expression in forward() - " % self.name)
             self.is_init = True
 
     def forward(self):

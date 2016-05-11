@@ -104,7 +104,7 @@ def build_graph():
 
     loss            = EuclideanLoss(graph, "loss")
 
-    error = MSE(graph, "mse", config={
+    error = MSE(graph, "mse", inputs=[rs], config={
         "root": True,
         "is_output": True,
         "phase": PHASE_TRAIN
@@ -131,7 +131,7 @@ def build_graph():
     label.connect(loss)
 
     label.connect(error)
-    rs.connect(error)
+    # rs.connect(error)
 
     return graph
 

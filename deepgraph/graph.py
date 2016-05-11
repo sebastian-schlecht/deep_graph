@@ -160,6 +160,7 @@ class Graph(object):
             if train_inputs is not None:
                 if batch_size is None:
                     raise AssertionError("Batch size is needed when compiling the graph with input data.")
+                # Value needs to be known to construct an iterator which does does not exceed the bounds of the chunk
                 self.n_train_batches = train_inputs[0].get_value(borrow=True).shape[0] // batch_size
                 replacements = [(var[self.index * batch_size: (self.index + 1) * batch_size]) for var in train_inputs]
                 # Zip them
@@ -206,7 +207,7 @@ class Graph(object):
                 )
                 self.compiled_with_var = False
 
-        # In case we also need to build an inference model, compile an apropriate one
+        # In case we also need to build an inference model, compile an appropriate one
         if phase is PHASE_ALL or phase is PHASE_INFER:
             infer_in = []
             infer_out = {}
