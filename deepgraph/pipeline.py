@@ -249,6 +249,14 @@ class H5DBLoader(Processor):
         self.label_field = None
         self.thresh = 0
 
+    def setup_defaults(self):
+        super(H5DBLoader, self).setup_defaults()
+        self.conf_default("db", None)
+        self.conf_default("key_label", "label")
+        self.conf_default("key_data", "data")
+        self.conf_default("chunk_size", 320)
+        self.conf_default("split_value", 0.9)
+
     def init(self):
         """
         Open a handle to the database and check if the config is valid and files exist
@@ -305,13 +313,7 @@ class H5DBLoader(Processor):
             # No top node found, enter spin wait time
             return False
 
-    def setup_defaults(self):
-        super(H5DBLoader, self).setup_defaults()
-        self.conf_default("db", None)
-        self.conf_default("key_label", "label")
-        self.conf_default("key_data", "data")
-        self.conf_default("chunk_size", 320)
-        self.conf_default("split_value", 0.9)
+
 
 
 class Optimizer(Processor):

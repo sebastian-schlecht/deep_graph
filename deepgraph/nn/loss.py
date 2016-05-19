@@ -1,11 +1,12 @@
 import theano.tensor as T
 
-from deepgraph.node import Node
+from deepgraph.node import Node, register_node
 from deepgraph.constants import *
 
 __docformat__ = 'restructedtext en'
 
 
+@register_node
 class NegativeLogLikelyHoodLoss(Node):
     """
     Compute the negative log likelyhood loss of a given input
@@ -43,6 +44,7 @@ class NegativeLogLikelyHoodLoss(Node):
         self.expression = -T.mean(T.log(pred)[T.arange(label.shape[0]), label])
 
 
+@register_node
 class L1RegularizationLoss(Node):
     """
     L1 regularization node for adjacent fc layers
@@ -75,6 +77,7 @@ class L1RegularizationLoss(Node):
         )
 
 
+@register_node
 class L2RegularizationLoss(Node):
     """
     L1 regularization node for adjacent fc layers
@@ -107,6 +110,7 @@ class L2RegularizationLoss(Node):
         )
 
 
+@register_node
 class LogarithmicScaleInvariantLoss(Node):
     """
     Compute log scale invariant error for depth prediction
@@ -142,6 +146,7 @@ class LogarithmicScaleInvariantLoss(Node):
             self.expression = T.mean(diff**2) - ((self.conf("lambda") / (in_0.shape.prod()**2)) * (T.sum(diff)**2))
 
 
+@register_node
 class EuclideanLoss(Node):
     """
     Computes the loss according to the mean euclidean distance of the input tensors

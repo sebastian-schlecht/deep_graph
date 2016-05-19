@@ -7,7 +7,7 @@ from theano.tensor.signal.pool import Pool as TPool, pool_2d
 from theano.tensor.nnet.abstract_conv import bilinear_upsampling
 from theano.sandbox.cuda import dnn
 
-from deepgraph.node import Node
+from deepgraph.node import Node, register_node
 from deepgraph.nn.init import (normal, constant)
 from deepgraph.utils.logging import log
 from deepgraph.constants import *
@@ -15,6 +15,7 @@ from deepgraph.constants import *
 __docformat__ = 'restructedtext en'
 
 
+@register_node
 class Conv2D(Node):
     """
     Combination of convolution and pooling for ConvNets
@@ -64,14 +65,10 @@ class Conv2D(Node):
         # "num output feature maps * filter height * filter width" /
         #   pooling size
         if self.W is None:
-            self.W = theano.shared(
-                self.conf("weight_filler")(size=self.filter_shape),
-                name='W_conv',
-                borrow=True
-            )
+            self.W = self.conf("weight_filler")(size=self.filter_shape, name='W_' + self.name)
 
         if self.b is None:
-            self.b = theano.shared(value=self.conf("bias_filler")(self.filter_shape[0]), name="b_conv", borrow=True)
+            self.b = self.conf("bias_filler")(size=self.filter_shape[0], name='b_' + self.name)
         # These are the params to be updated
         self.params = [self.W, self.b]
         ##############
@@ -87,7 +84,7 @@ class Conv2D(Node):
 
     def forward(self):
         if len(self.inputs) > 1:
-            raise AssertionError("ConvPool layer can only have one input")
+            raise AssertionError("Conv node can only have one input")
 
         # Use optimization in case the number of samples is constant during compilation
         if not Conv2D.use_cudnn:
@@ -122,6 +119,7 @@ class Conv2D(Node):
             self.expression = self.conf("activation")(conv_out)
 
 
+@register_node
 class Upsample(Node):
     """
     Upsample the input tensor along axis 2 and 3. The previous node has to provide 4D output
@@ -153,6 +151,7 @@ class Upsample(Node):
             self.expression = bilinear_upsampling(input=_in, ratio=self.conf("ratio"))
 
 
+@register_node
 class Pool(Node):
     """
     Downsample using the Theano pooling module
@@ -212,6 +211,7 @@ class Pool(Node):
                                            )
 
 
+@register_node
 class LRN(Node):
     """
     Local response normalization to reduce overfitting

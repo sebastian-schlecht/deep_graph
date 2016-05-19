@@ -13,8 +13,8 @@ def normal(mu=0, dev=0.01, dtype=theano.config.floatX):
     :param dtype: np.type
     :return:
     """
-    def gen(size):
-        return np.asarray(rng.normal(mu, dev, size=size), dtype=dtype)
+    def gen(size, name):
+        return theano.shared(value=np.asarray(rng.normal(mu, dev, size=size), dtype=dtype), name=name, borrow=True)
     return gen
 
 
@@ -26,8 +26,13 @@ def uniform(low=-0.5, high=0.5, dtype=theano.config.floatX):
     :param dtype: np.type
     :return:
     """
-    def gen(size):
-        return np.asarray(rng.uniform(low=low, high=high, size=size), dtype=dtype)
+    def gen(size, name):
+        return theano.shared(value=np.asarray(rng.uniform(low=low,
+                                                          high=high,
+                                                          size=size),
+                                              dtype=dtype),
+                             name=name,
+                             borrow=True)
     return gen
 
 
@@ -37,8 +42,8 @@ def zeros(dtype=theano.config.floatX):
     :param dtype: np.type
     :return:
     """
-    def gen(size):
-        return np.zeros(size, dtype=dtype)
+    def gen(size, name):
+        return theano.shared(value=np.zeros(size, dtype=dtype), name=name, borrow=True)
     return gen
 
 
@@ -49,11 +54,13 @@ def constant(value=1, dtype=theano.config.floatX):
     :param dtype: np.type
     :return:
     """
-    def gen(size):
+    def gen(size, name):
         arr = np.empty(size, dtype=dtype)
         arr.fill(value)
-        return arr
+
+        return theano.shared(value=arr, name=name, borrow=True)
     return gen
+
 
 def xavier(gain=1.0, dtype=theano.config.floatX):
     """
@@ -61,7 +68,11 @@ def xavier(gain=1.0, dtype=theano.config.floatX):
     """
     if gain == "relu":
         gain = np.sqrt(2)
-    def gen(size):
+
+    elif gain == "sigmoid":
+        gain = 4.0
+
+    def gen(size, name):
         if len(size) < 2:
             raise AssertionError("This initializer only works with shapes of length >= 2")
 
@@ -69,6 +80,24 @@ def xavier(gain=1.0, dtype=theano.config.floatX):
         receptive_field_size = np.prod(size[2:])
 
         std = gain * np.sqrt(2.0 / ((n1 + n2) * receptive_field_size))
-        return np.asarray(rng.normal(0, std, size=size), dtype=dtype)
+        return theano.shared(value=np.asarray(rng.normal(0, std, size=size), dtype=dtype), name=name, borrow=True)
         
+    return gen
+
+
+def shared(node, type):
+    """
+    Implements weight sharing between two nodes
+    :param node:
+    :return:
+    """
+    def gen(size, name):
+        # todo Check sizes
+        if type == "W":
+            return node.W
+        elif type == "b":
+            return node.b
+        else:
+            raise AssertionError("Unknown sharing type  %s" % type)
+
     return gen
